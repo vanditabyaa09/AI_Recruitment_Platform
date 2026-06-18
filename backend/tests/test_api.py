@@ -57,3 +57,10 @@ async def test_analytics(client):
     data = response.json()
     assert "total_cvs" in data
     assert "score_distribution" in data
+
+
+@pytest.mark.asyncio
+async def test_list_candidates_filter_validation(client):
+    response = await client.get("/api/v1/candidates?min_experience=2.5&max_experience=5.0&required_skills=Python,FastAPI")
+    assert response.status_code != 422
+

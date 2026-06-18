@@ -19,13 +19,13 @@ export function ParsedJDPreview({ jd }: { jd: JobDescription | null }) {
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <div className="flex flex-wrap gap-2">
-          {data.role && (
+          {Boolean(data.role) && (
             <Badge variant="default">{String(data.role)}</Badge>
           )}
-          {data.seniority && (
+          {Boolean(data.seniority) && (
             <Badge variant="secondary">{String(data.seniority)}</Badge>
           )}
-          {data.experience_required && (
+          {Boolean(data.experience_required) && (
             <Badge variant="secondary">{String(data.experience_required)} experience</Badge>
           )}
         </div>

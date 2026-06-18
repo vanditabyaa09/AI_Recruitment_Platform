@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import AsyncSessionLocal, get_db
-from app.models import JobDescription, Candidate, ProcessingJob, ProcessingStatus, ChatHistory
+from app.models import JobDescription, Candidate, ProcessingJob, ProcessingStatus, ChatHistory, CandidateSkill
 from app.schemas import (
     JDResponse, CandidateListItem, CandidateDetail, ProcessingJobResponse,
     AnalyticsResponse, ChatRequest, ChatResponse, RankRequest,
@@ -195,6 +195,9 @@ async def list_candidates(
     job_description_id: UUID | None = None,
     search: str | None = None,
     min_score: float | None = None,
+    min_experience: float | None = None,
+    max_experience: float | None = None,
+    required_skills: str | None = None,
     hidden_gems_only: bool = False,
     sort_by: str = "rank",
     sort_order: str = "asc",
@@ -209,6 +212,14 @@ async def list_candidates(
         query = query.where(or_(Candidate.name.ilike(f"%{search}%"), Candidate.email.ilike(f"%{search}%")))
     if hidden_gems_only:
         query = query.where(Candidate.is_hidden_gem == True)
+    if min_experience is not None:
+        query = query.where(Candidate.years_of_experience >= min_experience)
+    if max_experience is not None:
+        query = query.where(Candidate.years_of_experience <= max_experience)
+    if required_skills:
+        skills_list = [s.strip() for s in required_skills.split(",") if s.strip()]
+        for skill in skills_list:
+            query = query.where(Candidate.skills.any(CandidateSkill.skill_name.ilike(f"%{skill}%")))
 
     result = await db.execute(query)
     candidates = list(result.scalars().all())

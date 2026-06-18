@@ -19,6 +19,9 @@ export default function CandidatesPage() {
   const [search, setSearch] = useState("");
   const [hiddenGemsOnly, setHiddenGemsOnly] = useState(false);
   const [minScore, setMinScore] = useState("");
+  const [minExperience, setMinExperience] = useState("");
+  const [maxExperience, setMaxExperience] = useState("");
+  const [requiredSkills, setRequiredSkills] = useState("");
   const [sortBy, setSortBy] = useState("rank");
   const pageSize = 20;
 
@@ -32,13 +35,16 @@ export default function CandidatesPage() {
         page,
         page_size: pageSize,
         ...(minScore ? { min_score: Number(minScore) } : {}),
+        ...(minExperience ? { min_experience: Number(minExperience) } : {}),
+        ...(maxExperience ? { max_experience: Number(maxExperience) } : {}),
+        ...(requiredSkills ? { required_skills: requiredSkills } : {}),
       });
       setCandidates(res.items);
       setTotal(res.total);
     } catch {
       /* ignore */
     }
-  }, [activeJDId, search, hiddenGemsOnly, minScore, sortBy, page]);
+  }, [activeJDId, search, hiddenGemsOnly, minScore, minExperience, maxExperience, requiredSkills, sortBy, page]);
 
   useEffect(() => {
     fetchCandidates();
@@ -69,42 +75,86 @@ export default function CandidatesPage() {
 
       <Card className="mt-6">
         <CardHeader>
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                className="pl-10"
-                placeholder="Search by name or email..."
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              />
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  className="pl-10"
+                  placeholder="Search by name or email..."
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                />
+              </div>
+              <select
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="rank">Sort by Rank</option>
+                <option value="score">Sort by Score</option>
+                <option value="name">Sort by Name</option>
+                <option value="experience">Sort by Experience</option>
+              </select>
+              <Button
+                variant={hiddenGemsOnly ? "default" : "outline"}
+                size="sm"
+                onClick={() => { setHiddenGemsOnly(!hiddenGemsOnly); setPage(1); }}
+              >
+                <Gem className="h-4 w-4 mr-1" /> Hidden Gems
+              </Button>
             </div>
-            <select
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-            >
-              <option value="rank">Sort by Rank</option>
-              <option value="score">Sort by Score</option>
-              <option value="name">Sort by Name</option>
-              <option value="experience">Sort by Experience</option>
-            </select>
-            <Input
-              className="w-28"
-              type="number"
-              min={0}
-              max={100}
-              placeholder="Min score"
-              value={minScore}
-              onChange={(e) => { setMinScore(e.target.value); setPage(1); }}
-            />
-            <Button
-              variant={hiddenGemsOnly ? "default" : "outline"}
-              size="sm"
-              onClick={() => { setHiddenGemsOnly(!hiddenGemsOnly); setPage(1); }}
-            >
-              <Gem className="h-4 w-4" /> Hidden Gems
-            </Button>
+            
+            <div className="flex flex-wrap items-center gap-4 border-t pt-4 border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-500">Min Score:</span>
+                <Input
+                  className="w-24"
+                  type="number"
+                  min={0}
+                  max={100}
+                  placeholder="0"
+                  value={minScore}
+                  onChange={(e) => { setMinScore(e.target.value); setPage(1); }}
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-500">Min Exp (Yrs):</span>
+                <Input
+                  className="w-24"
+                  type="number"
+                  min={0}
+                  max={50}
+                  placeholder="0"
+                  value={minExperience}
+                  onChange={(e) => { setMinExperience(e.target.value); setPage(1); }}
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-500">Max Exp (Yrs):</span>
+                <Input
+                  className="w-24"
+                  type="number"
+                  min={0}
+                  max={50}
+                  placeholder="50"
+                  value={maxExperience}
+                  onChange={(e) => { setMaxExperience(e.target.value); setPage(1); }}
+                />
+              </div>
+
+              <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                <span className="text-xs font-medium text-slate-500">Skills:</span>
+                <Input
+                  className="flex-1"
+                  placeholder="e.g. Python, React, FastAPI (comma separated)"
+                  value={requiredSkills}
+                  onChange={(e) => { setRequiredSkills(e.target.value); setPage(1); }}
+                />
+              </div>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
