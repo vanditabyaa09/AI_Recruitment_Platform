@@ -8,6 +8,15 @@ from app.schemas import ParsedJD, ParsedCV, ScoreBreakdown, Explanation
 
 settings = get_settings()
 
+# Cap output tokens so completions can't ramble and inflate cost.
+MAX_OUTPUT_TOKENS = 700
+# Trim parser inputs — most JDs/CVs fit comfortably within this.
+MAX_INPUT_CHARS = 8000
+
+
+def _hash(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
 
 def _mock_embedding(text: str) -> list[float]:
     h = hashlib.sha256(text.encode()).digest()
@@ -28,33 +37,61 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 class AIService:
     def __init__(self):
         self.client = AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
+        # Content-hash caches so repeated/identical inputs cost zero tokens
+        # (e.g. re-ranking the same pool, re-uploading the same CV).
+        self._embedding_cache: dict[str, list[float]] = {}
+        self._parse_cache: dict[str, dict] = {}
 
     async def get_embedding(self, text: str) -> list[float]:
+        key = _hash(text)
+        if key in self._embedding_cache:
+            return self._embedding_cache[key]
         if settings.use_mock_ai or not self.client:
-            return _mock_embedding(text)
-        try:
-            response = await self.client.embeddings.create(
-                model=settings.embedding_model,
-                input=text[:8000],
-            )
-            return response.data[0].embedding
-        except Exception:
-            return _mock_embedding(text)
+            emb = _mock_embedding(text)
+        else:
+            try:
+                response = await self.client.embeddings.create(
+                    model=settings.embedding_model,
+                    input=text[:MAX_INPUT_CHARS],
+                )
+                emb = response.data[0].embedding
+            except Exception:
+                emb = _mock_embedding(text)
+        self._embedding_cache[key] = emb
+        return emb
 
     async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
-        """Batch-embed multiple texts in a single request (falls back per-text on error/mock)."""
+        """Batch-embed multiple texts in a single request. Cached texts are
+        served from cache and only the misses are sent to the API."""
         if not texts:
             return []
-        if settings.use_mock_ai or not self.client:
-            return [_mock_embedding(t) for t in texts]
-        try:
-            response = await self.client.embeddings.create(
-                model=settings.embedding_model,
-                input=[t[:8000] for t in texts],
-            )
-            return [item.embedding for item in response.data]
-        except Exception:
-            return [_mock_embedding(t) for t in texts]
+        results: list[list[float] | None] = [None] * len(texts)
+        miss_idx, miss_texts = [], []
+        for i, t in enumerate(texts):
+            cached = self._embedding_cache.get(_hash(t))
+            if cached is not None:
+                results[i] = cached
+            else:
+                miss_idx.append(i)
+                miss_texts.append(t)
+
+        if miss_texts:
+            if settings.use_mock_ai or not self.client:
+                embs = [_mock_embedding(t) for t in miss_texts]
+            else:
+                try:
+                    response = await self.client.embeddings.create(
+                        model=settings.embedding_model,
+                        input=[t[:MAX_INPUT_CHARS] for t in miss_texts],
+                    )
+                    embs = [item.embedding for item in response.data]
+                except Exception:
+                    embs = [_mock_embedding(t) for t in miss_texts]
+            for i, t, emb in zip(miss_idx, miss_texts, embs):
+                self._embedding_cache[_hash(t)] = emb
+                results[i] = emb
+
+        return [r for r in results]  # all slots filled
 
     async def _chat_json(self, system: str, user: str) -> dict:
         if settings.use_mock_ai or not self.client:
@@ -68,6 +105,7 @@ class AIService:
                 ],
                 response_format={"type": "json_object"},
                 temperature=0.2,
+                max_tokens=MAX_OUTPUT_TOKENS,
             )
             return json.loads(response.choices[0].message.content or "{}")
         except Exception:
@@ -84,6 +122,7 @@ class AIService:
                     {"role": "user", "content": user},
                 ],
                 temperature=0.4,
+                max_tokens=MAX_OUTPUT_TOKENS,
             )
             return response.choices[0].message.content or ""
         except Exception:
@@ -94,7 +133,7 @@ class AIService:
 Return JSON with keys: role, seniority, experience_required, hard_skills, soft_skills,
 must_have, nice_to_have, domain_knowledge, education_requirements, confidence_scores.
 confidence_scores should be a dict mapping each field to a 0-1 confidence value."""
-        data = await self._chat_json(system, text[:12000])
+        data = await self._chat_json(system, text[:MAX_INPUT_CHARS])
         if not data:
             data = self._mock_parse_jd(text)
         confidence = data.pop("confidence_scores", {})
@@ -135,9 +174,13 @@ confidence_scores should be a dict mapping each field to a 0-1 confidence value.
 name, email, phone, location, education (list of {institution, degree, year}),
 certifications, skills, companies, projects (list of {name, description}),
 years_of_experience (number), achievements, tenure_history (list of {company, role, start, end})."""
-        data = await self._chat_json(system, text[:12000])
+        key = _hash(text)
+        if key in self._parse_cache:
+            return ParsedCV.model_validate(self._parse_cache[key])
+        data = await self._chat_json(system, text[:MAX_INPUT_CHARS])
         if not data:
             data = self._mock_parse_cv(text)
+        self._parse_cache[key] = data
         return ParsedCV.model_validate(data)
 
     def _mock_parse_cv(self, text: str) -> dict:
@@ -214,23 +257,62 @@ years_of_experience (number), achievements, tenure_history (list of {company, ro
             soft_skill_score=round(soft_score * 100, 1),
         )
 
+    def local_explanation(self, jd: ParsedJD, cv: ParsedCV, scores: ScoreBreakdown) -> Explanation:
+        """Token-free, rule-based fit analysis. Used for the long tail of
+        candidates we don't surface, and as a fallback when the LLM is off."""
+        missing = [s for s in jd.must_have if s.lower() not in [sk.lower() for sk in cv.skills]]
+        strengths = [f"Strong {s} experience" for s in cv.skills[:3]]
+        gaps = [f"Missing {m}" for m in missing[:3]]
+        summary = (
+            f"{cv.name} demonstrates {'strong' if scores.overall_score > 70 else 'moderate'} alignment "
+            f"with {scores.overall_score:.0f}% overall match. "
+            f"{cv.years_of_experience:.0f} years of experience with skills in {', '.join(cv.skills[:4])}."
+        )
+        if gaps:
+            summary += f" Missing {gaps[0].replace('Missing ', '')} which is listed as a requirement."
+        return Explanation(
+            strengths=strengths,
+            gaps=gaps,
+            risks=["Limited exposure to some preferred qualifications"] if gaps else [],
+            potential=["Shows growth trajectory in technical roles"],
+            summary=summary,
+        )
+
+    def local_interview_questions(self, jd: ParsedJD, cv: ParsedCV) -> list[dict]:
+        """Token-free, rule-based interview questions (fallback path)."""
+        questions = []
+        for proj in cv.projects[:2]:
+            questions.append({"category": "project_deep_dive", "question": f"You mention {proj.get('name', 'a project')}. What architecture decisions helped maintain performance at scale?"})
+        for skill in cv.skills[:2]:
+            questions.append({"category": "technical", "question": f"Describe your experience with {skill} and a challenging problem you solved using it."})
+        for gap in jd.must_have[:1]:
+            if gap.lower() not in [s.lower() for s in cv.skills]:
+                questions.append({"category": "gap_probing", "question": f"The role requires {gap}. How would you approach building proficiency in this area?"})
+        questions.append({"category": "behavioral", "question": f"Tell me about a time at {cv.companies[0] if cv.companies else 'your previous role'} when you had to collaborate across teams under pressure."})
+        return questions
+
     async def generate_explanation(self, jd: ParsedJD, cv: ParsedCV, scores: ScoreBreakdown) -> Explanation:
         system = "You are a recruiter AI. Generate candidate fit analysis as JSON with keys: strengths, gaps, risks, potential (all lists), summary (string)."
         user = f"JD: {jd.model_dump_json()}\nCV: {cv.model_dump_json()}\nScores: {scores.model_dump_json()}"
         data = await self._chat_json(system, user)
         if not data:
-            missing = [s for s in jd.must_have if s.lower() not in [sk.lower() for sk in cv.skills]]
-            strengths = [f"Strong {s} experience" for s in cv.skills[:3]]
-            gaps = [f"Missing {m}" for m in missing[:3]]
-            summary = (
-                f"{cv.name} demonstrates {'strong' if scores.overall_score > 70 else 'moderate'} alignment "
-                f"with {scores.overall_score:.0f}% overall match. "
-                f"{cv.years_of_experience:.0f} years of experience with skills in {', '.join(cv.skills[:4])}."
-            )
-            if gaps:
-                summary += f" Missing {gaps[0].replace('Missing ', '')} which is listed as a requirement."
-            return Explanation(strengths=strengths, gaps=gaps, risks=["Limited exposure to some preferred qualifications"] if gaps else [], potential=["Shows growth trajectory in technical roles"], summary=summary)
+            return self.local_explanation(jd, cv, scores)
         return Explanation(**data)
+
+    async def analyze_candidate(self, jd: ParsedJD, cv: ParsedCV, scores: ScoreBreakdown) -> tuple[Explanation, list[dict]]:
+        """Single LLM call producing BOTH the fit explanation and tailored
+        interview questions — halves per-candidate calls for the shortlist."""
+        system = """You are a recruiter AI. Return JSON with keys:
+explanation: {strengths, gaps, risks, potential (all lists of strings), summary (string)}
+questions: list of {category: 'technical'|'behavioral'|'gap_probing'|'project_deep_dive', question: string}.
+Questions MUST reference specific CV content. No generic questions."""
+        user = f"JD: {jd.model_dump_json()}\nCV: {cv.model_dump_json()}\nScores: {scores.model_dump_json()}"
+        data = await self._chat_json(system, user)
+        if not data or "explanation" not in data:
+            return self.local_explanation(jd, cv, scores), self.local_interview_questions(jd, cv)
+        explanation = Explanation(**data["explanation"])
+        questions = data.get("questions") or self.local_interview_questions(jd, cv)
+        return explanation, questions
 
     async def generate_interview_questions(self, jd: ParsedJD, cv: ParsedCV) -> list[dict]:
         system = """Generate personalized interview questions as JSON with key 'questions' containing list of
@@ -239,16 +321,7 @@ Questions MUST reference specific CV content. No generic questions."""
         user = f"JD: {jd.model_dump_json()}\nCV: {cv.model_dump_json()}"
         data = await self._chat_json(system, user)
         if not data or "questions" not in data:
-            questions = []
-            for proj in cv.projects[:2]:
-                questions.append({"category": "project_deep_dive", "question": f"You mention {proj.get('name', 'a project')}. What architecture decisions helped maintain performance at scale?"})
-            for skill in cv.skills[:2]:
-                questions.append({"category": "technical", "question": f"Describe your experience with {skill} and a challenging problem you solved using it."})
-            for gap in jd.must_have[:1]:
-                if gap.lower() not in [s.lower() for s in cv.skills]:
-                    questions.append({"category": "gap_probing", "question": f"The role requires {gap}. How would you approach building proficiency in this area?"})
-            questions.append({"category": "behavioral", "question": f"Tell me about a time at {cv.companies[0] if cv.companies else 'your previous role'} when you had to collaborate across teams under pressure."})
-            return questions
+            return self.local_interview_questions(jd, cv)
         return data["questions"]
 
     async def chat_response(self, message: str, context: str) -> str:
