@@ -41,6 +41,21 @@ class AIService:
         except Exception:
             return _mock_embedding(text)
 
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
+        """Batch-embed multiple texts in a single request (falls back per-text on error/mock)."""
+        if not texts:
+            return []
+        if settings.use_mock_ai or not self.client:
+            return [_mock_embedding(t) for t in texts]
+        try:
+            response = await self.client.embeddings.create(
+                model=settings.embedding_model,
+                input=[t[:8000] for t in texts],
+            )
+            return [item.embedding for item in response.data]
+        except Exception:
+            return [_mock_embedding(t) for t in texts]
+
     async def _chat_json(self, system: str, user: str) -> dict:
         if settings.use_mock_ai or not self.client:
             return {}

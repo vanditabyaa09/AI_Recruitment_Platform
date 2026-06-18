@@ -10,6 +10,7 @@ from app.models import (
     InterviewQuestion, JobDescription, ProcessingJob, ProcessingStatus,
 )
 from app.services.ai_service import ai_service
+from app.services.semantic_ranking import semantic_ranker
 from app.services.vector_store import vector_store
 from app.services.diversity_service import generate_diversity_report
 from app.schemas import ParsedJD, ParsedCV
@@ -75,7 +76,9 @@ async def rank_candidates(db: AsyncSession, job_description_id: UUID, processing
         cv_embedding = await ai_service.get_embedding(cv_text)
         vector_store.upsert_cv(str(candidate.id), cv_embedding, {"name": candidate.name})
 
-        scores = await ai_service.compute_scores(parsed_jd, parsed_cv, jd_embedding, cv_embedding)
+        # Person 3: semantic ranking via per-dimension embedding similarity
+        # (not keyword matching). See semantic_ranking.SemanticRanker.
+        scores = await semantic_ranker.score_candidate(parsed_jd, parsed_cv)
         explanation = await ai_service.generate_explanation(parsed_jd, parsed_cv, scores)
 
         if candidate.scores:
