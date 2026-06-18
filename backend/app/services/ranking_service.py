@@ -16,6 +16,13 @@ from app.services.vector_store import vector_store
 from app.services.diversity_service import generate_diversity_report
 from app.schemas import ParsedJD, ParsedCV
 
+# How many candidates we spend LLM tokens on (written explanation + tailored
+# questions). The rest get a free, rule-based explanation. Hidden gems below
+# the cut are always added so non-traditional standouts are still surfaced.
+SHORTLIST_SIZE = 10
+# Concurrency cap for the shortlist's network-bound LLM calls.
+ANALYSIS_CONCURRENCY = 6
+
 
 async def _build_cv_text(cv: ParsedCV) -> str:
     parts = [
@@ -51,8 +58,11 @@ async def rank_candidates(db: AsyncSession, job_description_id: UUID, processing
 
     parsed_jd = ParsedJD(**jd_record.parsed_data) if jd_record.parsed_data else ParsedJD()
     jd_text = await _build_jd_text(parsed_jd)
-    jd_embedding = await ai_service.get_embedding(jd_text)
-    vector_store.upsert_jd(str(job_description_id), jd_embedding, {"role": parsed_jd.role})
+    # Reuse the JD embedding stored at upload time instead of paying to embed it again.
+    jd_embedding = vector_store.get_jd_embedding(str(job_description_id))
+    if jd_embedding is None:
+        jd_embedding = await ai_service.get_embedding(jd_text)
+        vector_store.upsert_jd(str(job_description_id), jd_embedding, {"role": parsed_jd.role})
 
     result = await db.execute(
         select(Candidate)
@@ -70,7 +80,12 @@ async def rank_candidates(db: AsyncSession, job_description_id: UUID, processing
             job.message = "Ranking candidates..."
             await db.flush()
 
+    # 1) Score everyone. Semantic scoring (Person 3) is token-light thanks to
+    #    the embedding cache (the JD's dimension embeddings are computed once and
+    #    reused across all candidates). Explanations here are the free rule-based
+    #    baseline; LLM-written ones are added only for the surfaced set (step 3).
     scored = []
+    score_map: dict = {}
     for idx, candidate in enumerate(candidates):
         parsed_cv = ParsedCV(**candidate.parsed_data) if candidate.parsed_data else ParsedCV(name=candidate.name)
         cv_text = await _build_cv_text(parsed_cv)
@@ -80,7 +95,7 @@ async def rank_candidates(db: AsyncSession, job_description_id: UUID, processing
         # Person 3: semantic ranking via per-dimension embedding similarity
         # (not keyword matching). See semantic_ranking.SemanticRanker.
         scores = await semantic_ranker.score_candidate(parsed_jd, parsed_cv)
-        explanation = await ai_service.generate_explanation(parsed_jd, parsed_cv, scores)
+        explanation = ai_service.local_explanation(parsed_jd, parsed_cv, scores)
 
         if candidate.scores:
             candidate.scores.overall_score = scores.overall_score
@@ -106,36 +121,69 @@ async def rank_candidates(db: AsyncSession, job_description_id: UUID, processing
             db.add(score_record)
             candidate.scores = score_record
 
+        score_map[candidate.id] = (parsed_cv, scores)
         scored.append((candidate, scores.overall_score))
 
         if processing_job_id and job:
             job.progress = idx + 1
-            job.message = f"Ranked {idx + 1}/{total} candidates"
+            job.message = f"Scored {idx + 1}/{total} candidates"
             await db.flush()
-            await asyncio.sleep(0.01)
 
     scored.sort(key=lambda x: x[1], reverse=True)
     for rank, (candidate, _) in enumerate(scored, 1):
         candidate.rank = rank
         candidate.status = "ranked"
+    await db.flush()
 
+    # 2) Diversity pass flags hidden gems — must run before we pick who to explain.
     await generate_diversity_report(db, job_description_id)
 
-    # Auto-generate interview questions for shortlisted top 10
-    shortlisted = [c for c, _ in scored[:10]]
-    for idx, candidate in enumerate(shortlisted):
-        try:
-            await generate_questions_for_candidate(db, candidate.id)
-        except Exception:
-            pass
-        if processing_job_id and job:
-            job.message = f"Generated questions for {idx + 1}/{len(shortlisted)} shortlisted candidates"
-            await db.flush()
+    # 3) Spend LLM tokens only on the surfaced set: top SHORTLIST_SIZE + any
+    #    hidden gems below the cut. A single combined call per candidate returns
+    #    both the written explanation and tailored interview questions.
+    top_cut = [c for c, _ in scored[:SHORTLIST_SIZE]]
+    gems = [c for c, _ in scored[SHORTLIST_SIZE:] if c.is_hidden_gem]
+    shortlist = top_cut + gems
+
+    if processing_job_id and job:
+        job.message = f"Generating explanations and questions for {len(shortlist)} shortlisted candidates..."
+        await db.flush()
+
+    sem = asyncio.Semaphore(ANALYSIS_CONCURRENCY)
+
+    async def _analyze(candidate):
+        parsed_cv, score_breakdown = score_map[candidate.id]
+        async with sem:
+            return candidate, await ai_service.analyze_candidate(parsed_jd, parsed_cv, score_breakdown)
+
+    # Run the network-bound LLM calls concurrently, then persist sequentially —
+    # a single AsyncSession must not be used from concurrent tasks.
+    analyses = await asyncio.gather(*[_analyze(c) for c in shortlist], return_exceptions=True)
+    for item in analyses:
+        if isinstance(item, BaseException):
+            continue
+        candidate, (explanation, questions) = item
+        if candidate.scores:
+            candidate.scores.explanation = explanation.model_dump()
+            candidate.scores.executive_summary = explanation.summary
+
+        existing = await db.execute(
+            select(InterviewQuestion).where(InterviewQuestion.candidate_id == candidate.id)
+        )
+        for q in existing.scalars().all():
+            await db.delete(q)
+        for q in questions:
+            db.add(InterviewQuestion(
+                candidate_id=candidate.id,
+                category=q.get("category", "technical"),
+                question=q.get("question", ""),
+            ))
+    await db.flush()
 
     if processing_job_id and job:
         job.status = ProcessingStatus.COMPLETED.value
         job.progress = total
-        job.message = f"Successfully ranked {total} candidates and generated interview questions for top 10"
+        job.message = f"Ranked {total} candidates; explained and prepared questions for top {len(shortlist)}"
         await db.flush()
 
     return [c for c, _ in scored]
