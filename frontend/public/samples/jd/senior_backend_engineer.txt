@@ -1,0 +1,31 @@
+Senior Backend Engineer
+
+About the Role:
+We are looking for a Senior Backend Engineer to join our platform team. You will design and build scalable microservices, work with cloud infrastructure, and mentor junior developers.
+
+Requirements:
+- 5+ years of professional software development experience
+- Strong proficiency in Python and FastAPI
+- Experience with PostgreSQL and database design
+- AWS cloud services (EC2, S3, Lambda)
+- Docker and containerization
+- RESTful API design
+
+Nice to Have:
+- Kubernetes orchestration experience
+- Machine learning pipeline integration
+- GraphQL APIs
+- CI/CD with GitHub Actions
+
+Soft Skills:
+- Strong communication and teamwork
+- Problem solving and analytical thinking
+- Leadership and mentoring
+
+Education:
+- Bachelor's degree in Computer Science or related field
+
+Domain Knowledge:
+- SaaS platform development
+- High-traffic web applications
+- Distributed systems

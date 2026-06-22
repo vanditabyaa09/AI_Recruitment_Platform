@@ -1,0 +1,27 @@
+Raj Kumar
+raj.kumar@email.com | +1-555-5223 | San Jose, CA
+
+Backend Engineer | 6 years experience
+
+Experience:
+TechCorp — Backend Engineer (2020-Present)
+- Built scalable Python applications and REST APIs
+- PostgreSQL database design and optimization
+- AWS cloud deployment with Docker
+
+DevSolutions — Junior Developer (2018-2020)
+- API development and testing
+- Agile team collaboration
+
+Skills: Python, Java, AWS, Kubernetes, PostgreSQL
+
+Education:
+BS Computer Science, San Jose State University, 2018
+
+Projects:
+- Microservices platform handling 100k requests daily
+- Data pipeline automation reducing manual work by 60%
+
+Achievements:
+- 6+ years professional experience
+- Delivered 3 major product releases on schedule

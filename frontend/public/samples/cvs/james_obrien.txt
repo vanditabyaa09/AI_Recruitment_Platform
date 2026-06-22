@@ -1,0 +1,30 @@
+James O'Brien
+james.obrien@email.com | +1-555-0104 | Boston, MA
+
+Senior Software Engineer | 8 years | Platform & Infrastructure
+
+Experience:
+MegaCorp — Senior Software Engineer (2018-Present)
+- Led backend platform team of 8 engineers
+- Python, Go, and Java microservices at scale
+- Kubernetes cluster management on AWS EKS
+- PostgreSQL, Redis, Kafka event streaming
+
+TechStart — Software Engineer (2016-2018)
+- Full stack development with Python and React
+
+Skills: Python, Go, Java, FastAPI, PostgreSQL, AWS, Kubernetes, Docker, Kafka, Redis
+
+Education:
+MS Computer Science, MIT, 2016
+BS Computer Science, Boston University, 2014
+
+Certifications: AWS Solutions Architect Professional, CKA
+
+Projects:
+- Distributed task queue processing 1M jobs daily
+- Zero-downtime migration of monolith to microservices
+
+Achievements:
+- Architected platform serving 2M daily active users
+- 8+ years professional experience

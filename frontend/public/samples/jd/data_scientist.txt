@@ -1,0 +1,30 @@
+Full Stack Data Scientist
+
+About the Role:
+Join our AI/ML team to build production machine learning systems. You will design experiments, deploy models, and collaborate with product and engineering teams.
+
+Requirements:
+- 3+ years of data science or ML engineering experience
+- Strong Python skills (pandas, scikit-learn, PyTorch or TensorFlow)
+- SQL and data pipeline experience
+- Experience deploying ML models to production
+- Statistical analysis and A/B testing
+
+Nice to Have:
+- LLM fine-tuning and prompt engineering
+- MLOps with Kubeflow or MLflow
+- Spark or Databricks experience
+- NLP and computer vision projects
+
+Soft Skills:
+- Clear communication of technical findings
+- Cross-functional collaboration
+- Curiosity and continuous learning
+
+Education:
+- Master's degree in Statistics, Computer Science, or related field preferred
+
+Domain Knowledge:
+- Recommendation systems
+- Customer analytics
+- Real-time inference at scale

@@ -1,0 +1,27 @@
+Nina Brown
+nina.brown@email.com | +1-555-7670 | Atlanta, GA
+
+Backend Engineer | 3 years experience
+
+Experience:
+TechCorp — Backend Engineer (2020-Present)
+- Built scalable Python applications and REST APIs
+- PostgreSQL database design and optimization
+- AWS cloud deployment with Docker
+
+DevSolutions — Junior Developer (2018-2020)
+- API development and testing
+- Agile team collaboration
+
+Skills: Python, JavaScript, Node.js, MongoDB
+
+Education:
+BS Computer Science, Georgia Tech, 2018
+
+Projects:
+- Microservices platform handling 100k requests daily
+- Data pipeline automation reducing manual work by 60%
+
+Achievements:
+- 3+ years professional experience
+- Delivered 3 major product releases on schedule

@@ -1,0 +1,29 @@
+Sarah Chen
+sarah.chen@email.com | +1-555-0101 | San Francisco, CA
+
+Senior Backend Engineer with 6 years of experience building scalable Python applications.
+
+Experience:
+TechFlow Inc — Senior Backend Engineer (2021-Present)
+- Built microservices serving 500k users using Python, FastAPI, and PostgreSQL
+- Deployed services on AWS with Docker and ECS
+- Reduced API latency by 40% through caching optimization
+
+DataPulse Systems — Backend Developer (2019-2021)
+- Developed REST APIs and data pipelines
+- Implemented CI/CD with GitHub Actions
+
+Skills: Python, FastAPI, PostgreSQL, AWS, Docker, Redis, Git, REST APIs
+
+Education:
+BS Computer Science, UC Berkeley, 2019
+
+Certifications: AWS Solutions Architect Associate
+
+Projects:
+- Recommendation engine serving 500k users with real-time personalization
+- Event-driven architecture migration reducing downtime by 99.9%
+
+Achievements:
+- Led team of 4 engineers on platform modernization
+- 6+ years professional experience
