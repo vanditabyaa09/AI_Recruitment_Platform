@@ -1,70 +1,90 @@
-# Deployment guide
+# Deployment guide (Render backend + Vercel frontend)
 
-The rebuild is committed locally on branch `optimize-credits-and-deploy`.
-Render (backend) and Vercel (frontend) auto-deploy from GitHub.
+Both Render and Vercel build from GitHub. The rebuild is committed locally — it
+must be **pushed** before either platform can deploy it.
 
-Existing live URLs:
-- Frontend (Vercel): `https://ai-recruitment-platform-theta.vercel.app` (currently the OLD build)
-- Backend (Render): `https://ai-recruitment-platform-backend.onrender.com` (currently 503 / old build)
+> ⚠️ Version match: the new backend serves `/api/...` (the old one served
+> `/api/v1/...`). The new frontend calls `/api/...`. Deploy **both** new versions
+> together, or the live site breaks.
 
 ---
 
-## 1. Push to GitHub (triggers auto-deploy)
+## Step 0 — Push the code to GitHub
 
-**Option A — production (recommended once you've reviewed locally):**
+The live Vercel app deploys from `main`, so merge there and push (this rebuilds
+the frontend too):
+
 ```bash
 git checkout main
 git merge optimize-credits-and-deploy
 git push origin main
 ```
 
-**Option B — preview first (non-destructive):**
-```bash
-git push origin optimize-credits-and-deploy
-```
-Vercel builds a preview URL; merge to `main` later to promote to production.
+(Or push the feature branch for a Vercel **preview** first:
+`git push origin optimize-credits-and-deploy`.)
 
 ---
 
-## 2. Render (backend) dashboard env vars
+## Step 1 — Deploy the backend on Render
 
-Service: `ai-recruitment-platform-backend`. Set under **Environment**:
+**Easiest (Blueprint):**
+1. Render Dashboard → **New → Blueprint**.
+2. Connect the GitHub repo → Render reads `render.yaml` and proposes the
+   `recruitiq-backend` web service (Docker, rootDir `backend`).
+3. When prompted for the synced secret, set **`GEMINI_API_KEY`** = your key
+   (the `AQ.`-prefixed one). Leave it blank to run in offline heuristic mode.
+4. **Apply** → first build takes a few minutes.
+
+**Manual alternative:** New → **Web Service** → connect repo → Root Directory
+`backend` → Runtime **Docker** (auto-detects the Dockerfile) → add env vars
+(below) → Create.
+
+Env vars (the blueprint pre-fills all but the key):
 
 | Key | Value |
 |-----|-------|
-| `GEMINI_API_KEY` | your key (the `AQ.`-prefixed one) |
+| `GEMINI_API_KEY` | your key (secret) |
 | `DEMO_MODE` | `false` |
 | `CORS_ORIGINS` | `https://ai-recruitment-platform-theta.vercel.app` |
-| `CORS_ORIGIN_REGEX` | `https://.*\.vercel\.app` (allows preview URLs) |
+| `CORS_ORIGIN_REGEX` | `https://.*\.vercel\.app` |
 
-Render injects `$PORT` automatically — don't set it. The Dockerfile binds it.
-Free tier sleeps after ~15 min idle (first request after sleep takes ~50s to wake).
+Don't set `PORT` — Render injects it and the Dockerfile binds it.
 
-## 3. Vercel (frontend) dashboard
-
-- **Root directory:** `frontend`
-- **Environment variable:** `NEXT_PUBLIC_API_URL = https://ai-recruitment-platform-backend.onrender.com`
-- Redeploy after setting it (Next.js bakes `NEXT_PUBLIC_*` in at build time).
-
----
-
-## 4. Verify live
-
+When it's live, copy the URL (e.g. `https://recruitiq-backend.onrender.com`) and verify:
 ```bash
-curl https://ai-recruitment-platform-backend.onrender.com/health
+curl https://<your-render-url>.onrender.com/health
 # -> {"status":"healthy","ai":true,"model":"gemini-2.5-flash-lite"}
 ```
-Then open the Vercel URL → Load 25 sample CVs → Screen candidates.
+
+> Free tier sleeps after ~15 min idle; the first request then takes ~50s to wake.
 
 ---
 
-## Free-tier demo tips (no billing)
+## Step 2 — Point the Vercel frontend at the Render backend
 
-Gemini free tier ≈ **20 generate requests/day** per model. To make real-AI runs count:
-- **Screen ~8–12 CVs per run** (not 25) → ~3–4 LLM calls → up to ~5 real-AI runs/day.
-- Embeddings have a separate, larger quota, so **ranking always works**, even after the
-  generate quota is gone.
-- When the daily quota is hit, a circuit breaker switches to the heuristic engine instantly
-  (no hanging), and the header shows "Offline heuristic mode". Explanations are still
-  candidate-specific, just rule-based instead of LLM-written.
-- Quota resets daily — do your final graded demo run on a fresh day, first thing.
+1. Vercel → your project → **Settings → Environment Variables**.
+2. Add `NEXT_PUBLIC_API_URL = https://<your-render-url>.onrender.com`
+   (no trailing slash), for Production.
+3. **Redeploy** the frontend (Deployments → ⋯ → Redeploy). `NEXT_PUBLIC_*` is
+   baked in at build time, so a redeploy is required after changing it.
+4. Confirm the Root Directory is `frontend` (Settings → General).
+
+---
+
+## Step 3 — Verify live
+
+Open https://ai-recruitment-platform-theta.vercel.app → the header should show
+**"AI live · gemini-2.5-flash-lite"** (or "Offline heuristic mode" if no key /
+quota). Run: Use sample → Parse → Load 25 sample CVs → Screen candidates.
+
+If you see CORS errors in the browser console, double-check `CORS_ORIGINS` on
+Render exactly matches the Vercel URL (scheme + host, no trailing slash).
+
+---
+
+## Free-tier note (Gemini)
+
+~20 generate requests/day per model. Screen ~8–12 CVs per run to make real-AI
+runs count; ranking always works (embeddings have separate quota); the app falls
+back to the heuristic engine when quota is exhausted. Enable billing to lift the
+cap (flash-lite ≈ $0.01 per screening).
