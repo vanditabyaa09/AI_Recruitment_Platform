@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     demo_mode: bool = True
     cors_origins: str = "http://localhost:3000"
+    # Optional regex for additional allowed origins, e.g. Vercel preview URLs:
+    #   CORS_ORIGIN_REGEX=https://.*\.vercel\.app
+    cors_origin_regex: str = ""
     upload_dir: str = "./uploads"
     chroma_persist_dir: str = "./chroma_data"
     max_upload_size_mb: int = 10
