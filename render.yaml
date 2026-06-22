@@ -1,6 +1,6 @@
 # Render Blueprint — backend API for RecruitIQ (no database needed).
-# Deploy: Render Dashboard → New → Blueprint → select this repo.
-# State is in-memory (RAM) and resets on restart/redeploy — there is no DB.
+# Deploy: Render Dashboard → New → Blueprint → select this repo (or New → Web
+# Service → Docker, rootDir backend). State is in-memory and resets on restart.
 services:
   - type: web
     name: recruitiq-backend
@@ -9,13 +9,16 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     plan: free
+    autoDeploy: true
     # Render injects $PORT automatically; the Dockerfile binds it. Do not set PORT.
     envVars:
       - key: GEMINI_API_KEY
-        sync: false        # set this secret in the dashboard (or leave empty for demo mode)
+        sync: false        # SET THIS SECRET in the dashboard (or leave empty for offline mode)
       - key: DEMO_MODE
-        value: "false"     # set "true" if you have no key and want mock AI
+        value: "false"     # "true" forces the offline heuristic engine
+      # Frontend origin(s) allowed by CORS. Pre-filled with the deployed Vercel app.
       - key: CORS_ORIGINS
-        sync: false        # set to your Vercel URL, e.g. https://your-app.vercel.app
+        value: https://ai-recruitment-platform-theta.vercel.app
+      # Also allow Vercel preview deployments (e.g. *-git-branch.vercel.app).
       - key: CORS_ORIGIN_REGEX
-        value: https://.*\.vercel\.app   # allows Vercel preview deployments
+        value: https://.*\.vercel\.app
