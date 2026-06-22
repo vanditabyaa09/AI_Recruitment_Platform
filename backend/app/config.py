@@ -21,7 +21,6 @@ class Settings(BaseSettings):
     #   CORS_ORIGIN_REGEX=https://.*\.vercel\.app
     cors_origin_regex: str = ""
     upload_dir: str = "./uploads"
-    chroma_persist_dir: str = "./chroma_data"
     max_upload_size_mb: int = 10
     rate_limit_per_minute: int = 60
     gemini_model: str = "gemini-2.0-flash"

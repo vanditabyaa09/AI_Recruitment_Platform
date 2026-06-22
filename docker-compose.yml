@@ -7,13 +7,11 @@ services:
       - "8000:8000"
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      CHROMA_PERSIST_DIR: /app/chroma_data
       UPLOAD_DIR: /app/uploads
       CORS_ORIGINS: http://localhost:3000,http://frontend:3000
       DEMO_MODE: ${DEMO_MODE:-true}
     volumes:
       - uploads_data:/app/uploads
-      - chroma_data:/app/chroma_data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -36,4 +34,3 @@ services:
 
 volumes:
   uploads_data:
-  chroma_data:

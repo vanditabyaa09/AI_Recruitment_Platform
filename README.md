@@ -72,9 +72,8 @@ flowchart LR
     end
 
     subgraph score [Ranking]
-        Embed[Embeddings]
-        Chroma[ChromaDB Vectors]
-        Score[Weighted Scoring]
+        Embed[Embeddings\nGemini or Demo Mock]
+        Score[Semantic Scoring\ncosine similarity]
         Explain[Explainability]
         Diversity[Diversity Analysis]
         Questions[Interview Questions]
@@ -89,8 +88,8 @@ flowchart LR
 
     JD --> DocParser --> AIParse
     CVs --> DocParser --> AIParse
-    AIParse --> Embed --> Chroma
-    AIParse --> Score --> Explain
+    AIParse --> Embed --> Score
+    Score --> Explain
     Score --> Diversity
     Score --> Questions
     Score --> Dashboard
@@ -198,7 +197,6 @@ npm run dev
 | `CORS_ORIGINS` | `http://localhost:3000` | Allowed frontend origins |
 | `CORS_ORIGIN_REGEX` | _(empty)_ | Regex for extra origins, e.g. `https://.*\.vercel\.app` |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Backend URL for frontend |
-| `CHROMA_PERSIST_DIR` | `./chroma_data` | ChromaDB storage path |
 | `MAX_UPLOAD_SIZE_MB` | `10` | Per-file upload limit (enforced) |
 | `RATE_LIMIT_PER_MINUTE` | `60` | API rate limit |
 
@@ -221,7 +219,7 @@ AI_Recruitment_Platform/
 │   │       ├── diversity_service.py# Bias/diversity flags
 │   │       ├── analytics_service.py# Dashboard analytics
 │   │       ├── report_service.py   # PDF reports
-│   │       └── vector_store.py     # ChromaDB
+│   │       └── semantic_ranking.py # Embedding-similarity scoring
 │   └── tests/
 ├── frontend/
 │   ├── src/app/                    # Next.js 15 pages
@@ -295,7 +293,6 @@ python3 -m pytest tests/ -v
 | Backend | Python 3.12, FastAPI, Uvicorn |
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS 4 |
 | Storage | In-memory (SQLAlchemy 2 + SQLite, no persistence) |
-| Vector Store | ChromaDB |
 | AI | Google Gemini `gemini-2.0-flash` + `gemini-embedding-001` |
 | Documents | PyMuPDF, pdfplumber, python-docx |
 | Reports | ReportLab (PDF) |

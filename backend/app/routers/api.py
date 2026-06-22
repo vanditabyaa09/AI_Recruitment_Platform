@@ -23,7 +23,6 @@ from app.services.ai_service import ai_service
 from app.services.ranking_service import rank_candidates, save_parsed_candidate, generate_questions_for_candidate
 from app.services.analytics_service import get_analytics
 from app.services.report_service import generate_candidate_pdf, generate_pool_pdf
-from app.services.vector_store import vector_store
 
 router = APIRouter()
 
@@ -103,10 +102,6 @@ async def upload_jd(
     )
     db.add(jd)
     await db.flush()
-
-    jd_text = f"Role: {parsed.role} Skills: {', '.join(parsed.hard_skills)}"
-    embedding = await ai_service.get_embedding(jd_text)
-    vector_store.upsert_jd(str(jd.id), embedding, {"role": parsed.role})
 
     return jd
 

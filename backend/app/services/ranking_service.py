@@ -12,7 +12,6 @@ from app.models import (
 )
 from app.services.ai_service import ai_service
 from app.services.semantic_ranking import semantic_ranker
-from app.services.vector_store import vector_store
 from app.services.diversity_service import generate_diversity_report
 from app.schemas import ParsedJD, ParsedCV
 
@@ -24,32 +23,6 @@ SHORTLIST_SIZE = 10
 ANALYSIS_CONCURRENCY = 6
 
 
-async def _build_cv_text(cv: ParsedCV) -> str:
-    parts = [
-        cv.name,
-        "Skills: " + ", ".join(cv.skills),
-        "Experience: " + str(cv.years_of_experience) + " years",
-        "Companies: " + ", ".join(cv.companies),
-        "Education: " + str(cv.education),
-        "Projects: " + str(cv.projects),
-        "Achievements: " + ", ".join(cv.achievements),
-    ]
-    return "\n".join(parts)
-
-
-async def _build_jd_text(jd: ParsedJD) -> str:
-    parts = [
-        f"Role: {jd.role}",
-        f"Seniority: {jd.seniority}",
-        f"Experience: {jd.experience_required}",
-        "Hard Skills: " + ", ".join(jd.hard_skills),
-        "Must Have: " + ", ".join(jd.must_have),
-        "Nice To Have: " + ", ".join(jd.nice_to_have),
-        "Domain: " + ", ".join(jd.domain_knowledge),
-    ]
-    return "\n".join(parts)
-
-
 async def rank_candidates(db: AsyncSession, job_description_id: UUID, processing_job_id: UUID | None = None) -> list[Candidate]:
     jd_result = await db.execute(select(JobDescription).where(JobDescription.id == job_description_id))
     jd_record = jd_result.scalar_one_or_none()
@@ -57,12 +30,6 @@ async def rank_candidates(db: AsyncSession, job_description_id: UUID, processing
         raise ValueError("Job description not found")
 
     parsed_jd = ParsedJD(**jd_record.parsed_data) if jd_record.parsed_data else ParsedJD()
-    jd_text = await _build_jd_text(parsed_jd)
-    # Reuse the JD embedding stored at upload time instead of paying to embed it again.
-    jd_embedding = vector_store.get_jd_embedding(str(job_description_id))
-    if jd_embedding is None:
-        jd_embedding = await ai_service.get_embedding(jd_text)
-        vector_store.upsert_jd(str(job_description_id), jd_embedding, {"role": parsed_jd.role})
 
     result = await db.execute(
         select(Candidate)
@@ -88,9 +55,6 @@ async def rank_candidates(db: AsyncSession, job_description_id: UUID, processing
     score_map: dict = {}
     for idx, candidate in enumerate(candidates):
         parsed_cv = ParsedCV(**candidate.parsed_data) if candidate.parsed_data else ParsedCV(name=candidate.name)
-        cv_text = await _build_cv_text(parsed_cv)
-        cv_embedding = await ai_service.get_embedding(cv_text)
-        vector_store.upsert_cv(str(candidate.id), cv_embedding, {"name": candidate.name})
 
         # Person 3: semantic ranking via per-dimension embedding similarity
         # (not keyword matching). See semantic_ranking.SemanticRanker.
