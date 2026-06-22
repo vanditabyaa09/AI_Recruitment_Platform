@@ -1,6 +1,6 @@
-# Render Blueprint — backend API + managed Postgres for RecruitIQ.
+# Render Blueprint — backend API for RecruitIQ (no database needed).
 # Deploy: Render Dashboard → New → Blueprint → select this repo.
-# (Frontend stays on Vercel; this file deploys only the backend + database.)
+# State is in-memory (RAM) and resets on restart/redeploy — there is no DB.
 services:
   - type: web
     name: recruitiq-backend
@@ -8,16 +8,9 @@ services:
     rootDir: backend
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
-    plan: free            # 'free' has no persistent disk (data is ephemeral but
-                          # the app tolerates it — Postgres is the source of truth,
-                          # Chroma re-embeds on re-rank). Upgrade to 'starter' and
-                          # uncomment the disk block below for persistence.
+    plan: free
     # Render injects $PORT automatically; the Dockerfile binds it. Do not set PORT.
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: recruitiq-db
-          property: connectionString
       - key: GEMINI_API_KEY
         sync: false        # set this secret in the dashboard (or leave empty for demo mode)
       - key: DEMO_MODE
@@ -26,14 +19,3 @@ services:
         sync: false        # set to your Vercel URL, e.g. https://your-app.vercel.app
       - key: CORS_ORIGIN_REGEX
         value: https://.*\.vercel\.app   # allows Vercel preview deployments
-    # disk:                # requires a paid plan
-    #   name: recruitiq-data
-    #   mountPath: /data
-    #   sizeGB: 1
-    # (if you enable the disk, also set CHROMA_PERSIST_DIR=/data/chroma and UPLOAD_DIR=/data/uploads)
-
-databases:
-  - name: recruitiq-db
-    plan: free            # free Postgres (adjust as needed)
-    databaseName: recruitiq
-    user: recruitiq

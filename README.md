@@ -164,14 +164,9 @@ Loads the sample JD, parses all 25 CVs, runs ranking, diversity analysis, and qu
 
 - Node.js 20+
 - Python 3.12+
-- PostgreSQL 16+
 - (Optional) Gemini API key for live AI
 
-### Database
-
-```bash
-docker compose up postgres -d
-```
+> No database to install — the backend keeps all state in memory (it resets on restart).
 
 ### Backend
 
@@ -180,9 +175,7 @@ cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cd ..
-cp .env.example .env
-cd backend
+cp ../.env.example ../.env   # optional: add GEMINI_API_KEY
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -200,10 +193,10 @@ npm run dev
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `postgresql+asyncpg://...` | Async PostgreSQL connection |
 | `GEMINI_API_KEY` | _(empty)_ | Google Gemini key; leave empty for demo mode |
 | `DEMO_MODE` | `true` | Use mock AI when no API key |
 | `CORS_ORIGINS` | `http://localhost:3000` | Allowed frontend origins |
+| `CORS_ORIGIN_REGEX` | _(empty)_ | Regex for extra origins, e.g. `https://.*\.vercel\.app` |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Backend URL for frontend |
 | `CHROMA_PERSIST_DIR` | `./chroma_data` | ChromaDB storage path |
 | `MAX_UPLOAD_SIZE_MB` | `10` | Per-file upload limit (enforced) |
@@ -289,10 +282,7 @@ Full docs: [docs/API.md](docs/API.md) and http://localhost:8000/docs
 cd backend
 pip install -r requirements.txt
 
-# Unit tests (no DB required)
-python3 -m pytest tests/test_services.py -v
-
-# Full suite (requires PostgreSQL)
+# Full suite (no external services needed — uses an in-memory DB)
 python3 -m pytest tests/ -v
 ```
 
@@ -304,7 +294,7 @@ python3 -m pytest tests/ -v
 |-------|------------|
 | Backend | Python 3.12, FastAPI, Uvicorn |
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS 4 |
-| Database | PostgreSQL 16 (SQLAlchemy 2 + asyncpg) |
+| Storage | In-memory (SQLAlchemy 2 + SQLite, no persistence) |
 | Vector Store | ChromaDB |
 | AI | Google Gemini `gemini-2.0-flash` + `gemini-embedding-001` |
 | Documents | PyMuPDF, pdfplumber, python-docx |

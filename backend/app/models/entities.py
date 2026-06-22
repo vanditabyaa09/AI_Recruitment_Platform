@@ -2,9 +2,8 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 from datetime import datetime
-from sqlalchemy import String, Text, Float, Integer, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import String, Text, Float, Integer, Boolean, DateTime, ForeignKey, JSON, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
 import enum
 
 from app.database import Base
@@ -20,7 +19,7 @@ class ProcessingStatus(str, enum.Enum):
 class JobDescription(Base):
     __tablename__ = "job_descriptions"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title: Mapped[str] = mapped_column(String(255), default="Untitled Role")
     raw_text: Mapped[str] = mapped_column(Text, default="")
     file_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
@@ -35,9 +34,9 @@ class JobDescription(Base):
 class Candidate(Base):
     __tablename__ = "candidates"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_description_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("job_descriptions.id"), nullable=True
+        Uuid(as_uuid=True), ForeignKey("job_descriptions.id"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(255), default="Unknown")
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -68,8 +67,8 @@ class Candidate(Base):
 class CandidateSkill(Base):
     __tablename__ = "candidate_skills"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    candidate_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("candidates.id"))
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    candidate_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("candidates.id"))
     skill_name: Mapped[str] = mapped_column(String(255))
     category: Mapped[str] = mapped_column(String(50), default="technical")
 
@@ -79,8 +78,8 @@ class CandidateSkill(Base):
 class CandidateExperience(Base):
     __tablename__ = "candidate_experience"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    candidate_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("candidates.id"))
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    candidate_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("candidates.id"))
     company: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(255), default="")
     start_date: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -93,8 +92,8 @@ class CandidateExperience(Base):
 class CandidateScore(Base):
     __tablename__ = "candidate_scores"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    candidate_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("candidates.id"), unique=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    candidate_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("candidates.id"), unique=True)
     overall_score: Mapped[float] = mapped_column(Float, default=0.0)
     skill_score: Mapped[float] = mapped_column(Float, default=0.0)
     experience_score: Mapped[float] = mapped_column(Float, default=0.0)
@@ -110,8 +109,8 @@ class CandidateScore(Base):
 class InterviewQuestion(Base):
     __tablename__ = "interview_questions"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    candidate_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("candidates.id"))
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    candidate_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("candidates.id"))
     category: Mapped[str] = mapped_column(String(50))
     question: Mapped[str] = mapped_column(Text)
 
@@ -121,8 +120,8 @@ class InterviewQuestion(Base):
 class DiversityReport(Base):
     __tablename__ = "diversity_reports"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    job_description_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("job_descriptions.id"))
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_description_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("job_descriptions.id"))
     alerts: Mapped[list] = mapped_column(JSON, default=list)
     insights: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -133,9 +132,9 @@ class DiversityReport(Base):
 class ChatHistory(Base):
     __tablename__ = "chat_history"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_description_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("job_descriptions.id"), nullable=True
+        Uuid(as_uuid=True), ForeignKey("job_descriptions.id"), nullable=True
     )
     session_id: Mapped[str] = mapped_column(String(100))
     role: Mapped[str] = mapped_column(String(20))
@@ -146,9 +145,9 @@ class ChatHistory(Base):
 class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_description_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("job_descriptions.id"), nullable=True
+        Uuid(as_uuid=True), ForeignKey("job_descriptions.id"), nullable=True
     )
     job_type: Mapped[str] = mapped_column(String(50))
     status: Mapped[str] = mapped_column(String(20), default=ProcessingStatus.PENDING.value)

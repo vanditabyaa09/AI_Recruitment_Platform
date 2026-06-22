@@ -12,7 +12,8 @@ _ENV_FILES = (str(_REPO_ROOT / ".env"), str(_BACKEND_DIR / ".env"))
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://recruitiq:recruitiq_secret@localhost:5432/recruitiq"
+    # No database: the app stores everything in an in-memory SQLite engine
+    # (see app/database.py). There is no DATABASE_URL / Postgres anymore.
     gemini_api_key: str = ""
     demo_mode: bool = True
     cors_origins: str = "http://localhost:3000"

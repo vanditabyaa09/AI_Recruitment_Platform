@@ -1,20 +1,4 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-recruitiq}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-recruitiq_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-recruitiq}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-recruitiq}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   backend:
     build:
       context: ./backend
@@ -22,7 +6,6 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-recruitiq}:${POSTGRES_PASSWORD:-recruitiq_secret}@postgres:5432/${POSTGRES_DB:-recruitiq}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       CHROMA_PERSIST_DIR: /app/chroma_data
       UPLOAD_DIR: /app/uploads
@@ -31,9 +14,6 @@ services:
     volumes:
       - uploads_data:/app/uploads
       - chroma_data:/app/chroma_data
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -55,6 +35,5 @@ services:
         condition: service_healthy
 
 volumes:
-  postgres_data:
   uploads_data:
   chroma_data:
