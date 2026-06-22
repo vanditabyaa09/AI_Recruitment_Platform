@@ -12,6 +12,7 @@ import { ProcessingStatus } from "@/components/dashboard/processing-status";
 import { DiversityAlertsPanel } from "@/components/dashboard/diversity-alerts";
 import { ParsedJDPreview } from "@/components/dashboard/parsed-jd-preview";
 import { useApp } from "@/context/app-context";
+import { useToast } from "@/context/toast-context";
 import { api, CandidateListItem, Analytics, JobDescription } from "@/lib/api";
 import { getScoreColor, formatScore } from "@/lib/utils";
 import Link from "next/link";
@@ -19,6 +20,7 @@ import { Gem, AlertTriangle, FileText as FileIcon } from "lucide-react";
 
 export default function DashboardPage() {
   const { activeJDId, setActiveJDId, jobDescriptions, refreshJDs, backendConnected } = useApp();
+  const { addToast } = useToast();
   const [jdText, setJdText] = useState("");
   const [jdFile, setJdFile] = useState<File | null>(null);
   const [cvFiles, setCvFiles] = useState<File[]>([]);
@@ -45,9 +47,9 @@ export default function DashboardPage() {
       setAnalytics(analyticsRes);
       setActiveJD(jdRes);
     } catch {
-      /* ignore */
+      addToast("Failed to refresh dashboard data.", "error");
     }
-  }, [activeJDId]);
+  }, [activeJDId, addToast]);
 
   useEffect(() => {
     if (activeJDId) refreshData();
@@ -109,7 +111,7 @@ export default function DashboardPage() {
       const rec = await api.hiringRecommendation(activeJDId);
       setRecommendation(rec);
     } catch {
-      /* ignore */
+      addToast("Failed to get hiring recommendation.", "error");
     }
   };
 

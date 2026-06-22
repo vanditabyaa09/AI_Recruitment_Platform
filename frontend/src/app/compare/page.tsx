@@ -9,12 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useApp } from "@/context/app-context";
+import { useToast } from "@/context/toast-context";
 import { api, CandidateListItem, ComparedCandidate } from "@/lib/api";
 import { formatScore, getScoreColor } from "@/lib/utils";
 import Link from "next/link";
 
 export default function ComparePage() {
   const { activeJDId } = useApp();
+  const { addToast } = useToast();
   const [candidates, setCandidates] = useState<CandidateListItem[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [comparison, setComparison] = useState<ComparedCandidate[]>([]);
@@ -24,8 +26,8 @@ export default function ComparePage() {
     if (!activeJDId) return;
     api.listCandidates({ job_description_id: activeJDId, page_size: 50, sort_by: "score", sort_order: "desc" })
       .then((res) => setCandidates(res.items))
-      .catch(() => {});
-  }, [activeJDId]);
+      .catch(() => addToast("Failed to load candidates.", "error"));
+  }, [activeJDId, addToast]);
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -42,7 +44,7 @@ export default function ComparePage() {
       const res = await api.compareCandidates(selected, activeJDId || undefined);
       setComparison(res.candidates);
     } catch {
-      /* ignore */
+      addToast("Comparison failed. Please try again.", "error");
     }
     setLoading(false);
   };

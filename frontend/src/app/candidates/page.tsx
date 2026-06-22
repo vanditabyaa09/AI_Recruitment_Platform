@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useApp } from "@/context/app-context";
+import { useToast } from "@/context/toast-context";
 import { api, CandidateListItem } from "@/lib/api";
 import { getScoreColor, formatScore } from "@/lib/utils";
 
 export default function CandidatesPage() {
   const { activeJDId } = useApp();
+  const { addToast } = useToast();
   const [candidates, setCandidates] = useState<CandidateListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -42,9 +44,9 @@ export default function CandidatesPage() {
       setCandidates(res.items);
       setTotal(res.total);
     } catch {
-      /* ignore */
+      addToast("Failed to load candidates. Check backend connection.", "error");
     }
-  }, [activeJDId, search, hiddenGemsOnly, minScore, minExperience, maxExperience, requiredSkills, sortBy, page]);
+  }, [activeJDId, search, hiddenGemsOnly, minScore, minExperience, maxExperience, requiredSkills, sortBy, page, addToast]);
 
   useEffect(() => {
     fetchCandidates();

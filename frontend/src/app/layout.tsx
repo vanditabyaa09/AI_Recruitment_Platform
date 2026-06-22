@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/navbar";
 import { AppProvider } from "@/context/app-context";
+import { ToastProvider } from "@/context/toast-context";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -22,10 +23,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} antialiased`}>
-        <AppProvider>
-          <Navbar />
-          <main>{children}</main>
-        </AppProvider>
+        <ToastProvider>
+          <AppProvider>
+            <Navbar />
+            <main>{children}</main>
+          </AppProvider>
+        </ToastProvider>
       </body>
     </html>
   );
