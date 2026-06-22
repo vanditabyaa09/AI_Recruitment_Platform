@@ -142,6 +142,28 @@ export function Setup({ onRun, aiEnabled, model }: Props) {
                 {p.nice_to_have.length ? p.nice_to_have.map((s) => <SkillChip key={s} skill={s} />) : <span className="text-xs text-faint">—</span>}
               </div>
             </div>
+            {p.soft_skills.length > 0 && (
+              <div>
+                <span className="label">Soft skills</span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {p.soft_skills.map((s) => <SkillChip key={s} skill={s} />)}
+                </div>
+              </div>
+            )}
+            {p.domain_knowledge.length > 0 && (
+              <div>
+                <span className="label">Domain knowledge</span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {p.domain_knowledge.map((s) => <SkillChip key={s} skill={s} />)}
+                </div>
+              </div>
+            )}
+            {p.education_requirements.length > 0 && (
+              <div>
+                <span className="label">Education</span>
+                <p className="mt-1 text-xs text-muted">{p.education_requirements.join("; ")}</p>
+              </div>
+            )}
           </div>
         )}
       </section>

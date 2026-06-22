@@ -123,6 +123,30 @@ export function CandidateDrawer({ id, onClose }: { id: string; onClose: () => vo
               </Section>
             )}
 
+            {/* education */}
+            {data.parsed.education.length > 0 && (
+              <Section title="Education">
+                <div className="space-y-1.5">
+                  {data.parsed.education.map((e, i) => (
+                    <div key={i} className="text-sm">
+                      <span className="font-medium">{[e.degree, e.field].filter(Boolean).join(", ") || "Degree"}</span>
+                      {e.institution && <span className="text-muted"> · {e.institution}</span>}
+                      {e.year && <span className="text-faint"> ({e.year})</span>}
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            )}
+
+            {/* certifications */}
+            {data.parsed.certifications.length > 0 && (
+              <Section title="Certifications">
+                <div className="flex flex-wrap gap-1.5">
+                  {data.parsed.certifications.map((c) => <SkillChip key={c} skill={c} />)}
+                </div>
+              </Section>
+            )}
+
             {/* interview questions */}
             <Section title="Tailored interview questions">
               <div className="space-y-2.5">
