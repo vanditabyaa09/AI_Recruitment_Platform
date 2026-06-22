@@ -1,0 +1,33 @@
+{
+ "cvs": [
+  "aisha_patel.txt",
+  "alex_turner.txt",
+  "carlos_mendez.txt",
+  "claire_dubois.txt",
+  "david_kim.txt",
+  "diana_roth.txt",
+  "emily_wong.txt",
+  "fatima_hassan.txt",
+  "hassan_rahman.txt",
+  "james_obrien.txt",
+  "jenny_park.txt",
+  "kevin_lee.txt",
+  "lisa_anderson.txt",
+  "marcus_johnson.txt",
+  "maria_garcia.txt",
+  "mike_stevens.txt",
+  "nina_brown.txt",
+  "omar_ali.txt",
+  "priya_sharma.txt",
+  "raj_kumar.txt",
+  "ryan_cooper.txt",
+  "sarah_chen.txt",
+  "sophie_martin.txt",
+  "tom_wilson.txt",
+  "yuki_tanaka.txt"
+ ],
+ "jds": [
+  "data_scientist.txt",
+  "senior_backend_engineer.txt"
+ ]
+}

@@ -1,0 +1,26 @@
+Priya Sharma
+priya.sharma@email.com | +1-555-0103 | Seattle, WA
+
+Full Stack Engineer transitioning to Backend | 3 years experience
+
+Experience:
+InnovateLabs — Full Stack Engineer (2021-Present)
+- React frontend and Node.js backend development
+- Recently focused on Python microservices migration
+- PostgreSQL and MongoDB databases
+
+Freelance — Web Developer (2019-2021)
+- Built client websites and APIs
+
+Skills: Python, JavaScript, React, Node.js, PostgreSQL, MongoDB, Git
+
+Education:
+B.Tech Information Technology, Pune University, 2019
+
+Projects:
+- E-commerce platform with 50k monthly users
+- Python data migration tool for legacy systems
+
+Achievements:
+- Self-taught Python and completed backend transition
+- 3 years professional experience

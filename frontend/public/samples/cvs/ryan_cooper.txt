@@ -1,0 +1,27 @@
+Ryan Cooper
+ryan.cooper@email.com | +1-555-4617 | Charlotte, NC
+
+Backend Engineer | 5 years experience
+
+Experience:
+TechCorp — Backend Engineer (2020-Present)
+- Built scalable Python applications and REST APIs
+- PostgreSQL database design and optimization
+- AWS cloud deployment with Docker
+
+DevSolutions — Junior Developer (2018-2020)
+- API development and testing
+- Agile team collaboration
+
+Skills: Python, Flask, AWS, SQL, Docker
+
+Education:
+BS Computer Science, UNC Charlotte, 2018
+
+Projects:
+- Microservices platform handling 100k requests daily
+- Data pipeline automation reducing manual work by 60%
+
+Achievements:
+- 5+ years professional experience
+- Delivered 3 major product releases on schedule

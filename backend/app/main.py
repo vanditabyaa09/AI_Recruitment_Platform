@@ -1,35 +1,23 @@
-from contextlib import asynccontextmanager
+import logging
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
-from app.database import init_db
-from app.routers.api import router
+from app.gemini import gemini
+from app.routers import router
+
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger("recruitiq")
 
 settings = get_settings()
-limiter = Limiter(key_func=get_remote_address, default_limits=[f"{settings.rate_limit_per_minute}/minute"])
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_db()
-    yield
-
 
 app = FastAPI(
-    title="RecruitIQ AI API",
-    description="AI-Augmented Recruitment Platform API",
-    version="1.0.0",
-    lifespan=lifespan,
+    title="RecruitIQ AI",
+    description="AI-Augmented Recruitment Platform — screen CVs, rank semantically, explain why.",
+    version="2.0.0",
 )
-
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,12 +28,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router, prefix="/api/v1")
+app.include_router(router, prefix="/api")
+
+
+@app.on_event("startup")
+async def startup():
+    mode = f"Gemini ({settings.gemini_model})" if gemini.available else "OFFLINE heuristic mode"
+    logger.info("RecruitIQ AI started — AI backend: %s", mode)
 
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "demo_mode": settings.use_mock_ai}
+    return {"status": "healthy", "ai": gemini.available, "model": settings.gemini_model}
 
 
 @app.get("/")
@@ -55,4 +49,5 @@ async def root():
         "tagline": "Screen 1,000 CVs. Surface the 10 who matter. Explain why.",
         "docs": "/docs",
         "health": "/health",
+        "ai_enabled": gemini.available,
     }

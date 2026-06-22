@@ -1,0 +1,27 @@
+Marcus Johnson
+marcus.j@email.com | +1-555-0102 | Austin, TX
+
+Backend Developer | 4 years experience | Python enthusiast
+
+Experience:
+CloudNine Technologies — Backend Developer (2022-Present)
+- Python and Django development for fintech platform
+- PostgreSQL database optimization
+- AWS Lambda serverless functions
+
+StartupHub — Junior Developer (2020-2022)
+- Built REST APIs with Flask
+- Docker containerization
+
+Skills: Python, Django, Flask, PostgreSQL, AWS, Docker, JavaScript, SQL
+
+Education:
+BS Software Engineering, Texas State University, 2020
+
+Projects:
+- Payment processing system handling 10k transactions daily
+- Automated deployment pipeline with Docker
+
+Achievements:
+- Improved test coverage from 60% to 95%
+- 4 years professional experience

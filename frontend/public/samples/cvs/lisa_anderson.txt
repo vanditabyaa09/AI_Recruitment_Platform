@@ -1,0 +1,27 @@
+Lisa Anderson
+lisa.anderson@email.com | +1-555-1694 | Denver, CO
+
+Backend Engineer | 4 years experience
+
+Experience:
+TechCorp — Backend Engineer (2020-Present)
+- Built scalable Python applications and REST APIs
+- PostgreSQL database design and optimization
+- AWS cloud deployment with Docker
+
+DevSolutions — Junior Developer (2018-2020)
+- API development and testing
+- Agile team collaboration
+
+Skills: Python, FastAPI, PostgreSQL, Docker
+
+Education:
+BS Computer Science, Colorado State University, 2018
+
+Projects:
+- Microservices platform handling 100k requests daily
+- Data pipeline automation reducing manual work by 60%
+
+Achievements:
+- 4+ years professional experience
+- Delivered 3 major product releases on schedule

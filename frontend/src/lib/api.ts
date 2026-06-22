@@ -1,223 +1,234 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// API client for the RecruitIQ backend.
+const BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}/api/v1${endpoint}`, {
-    ...options,
-    headers: {
-      ...(options?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-      ...options?.headers,
-    },
-  });
-  if (!res.ok) {
-    const errorText = await res.text();
-    let message = errorText || `API error: ${res.status}`;
-    try {
-      const parsed = JSON.parse(errorText) as { detail?: string | { msg: string }[] };
-      if (typeof parsed.detail === "string") {
-        message = parsed.detail;
-      } else if (Array.isArray(parsed.detail)) {
-        message = parsed.detail.map((d) => d.msg).join(", ");
-      }
-    } catch {
-      /* use raw error text */
-    }
-    throw new Error(message);
-  }
-  const contentType = res.headers.get("content-type");
-  if (contentType?.includes("application/json")) {
-    return res.json();
-  }
-  return res as unknown as T;
+// ---- Types (mirror backend/app/schemas.py) ----
+export interface ParsedJD {
+  role: string;
+  seniority: string;
+  experience_required: string;
+  min_years: number;
+  hard_skills: string[];
+  soft_skills: string[];
+  must_have: string[];
+  nice_to_have: string[];
+  domain_knowledge: string[];
+  education_requirements: string[];
+  responsibilities: string[];
 }
 
-export interface JobDescription {
+export interface JDResponse {
   id: string;
   title: string;
-  parsed_data: Record<string, unknown>;
-  confidence_scores: Record<string, number>;
-  created_at: string;
+  parsed: ParsedJD;
+  confidence: Record<string, number>;
 }
 
-export interface CandidateListItem {
+export interface JobStatus {
   id: string;
-  rank: number | null;
+  jd_id: string;
+  status: "pending" | "parsing" | "ranking" | "explaining" | "done" | "failed";
+  progress: number;
+  total: number;
+  processed: number;
+  message: string;
+  elapsed_seconds: number;
+  using_ai: boolean;
+}
+
+export interface CandidateSummary {
+  id: string;
+  rank: number;
   name: string;
-  overall_score: number;
+  headline: string;
+  overall: number;
   years_of_experience: number;
   top_skills: string[];
-  status: string;
+  recommendation: string;
   is_hidden_gem: boolean;
+  summary: string;
 }
 
-export interface CandidateDetail {
-  id: string;
+export interface ScoreBreakdown {
+  overall: number;
+  skills: number;
+  experience: number;
+  domain: number;
+  education: number;
+  soft_skills: number;
+  semantic: number;
+}
+
+export interface Explanation {
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  flags: string[];
+  recommendation: string;
+}
+
+export interface InterviewQuestion {
+  category: string;
+  question: string;
+}
+
+export interface EducationItem {
+  institution: string;
+  degree: string;
+  field: string;
+  year: string;
+}
+
+export interface ExperienceItem {
+  company: string;
+  role: string;
+  start: string;
+  end: string;
+  highlights: string[];
+}
+
+export interface ParsedCV {
   name: string;
   email: string | null;
   phone: string | null;
   location: string | null;
-  parsed_data: Record<string, unknown>;
+  headline: string;
   years_of_experience: number;
-  rank: number | null;
-  is_hidden_gem: boolean;
-  scores: {
-    overall_score: number;
-    skill_score: number;
-    experience_score: number;
-    domain_score: number;
-    education_score: number;
-    soft_skill_score: number;
-  } | null;
-  explanation: {
-    strengths: string[];
-    gaps: string[];
-    risks: string[];
-    potential: string[];
-    summary: string;
-  } | null;
-  executive_summary: string | null;
   skills: string[];
-  experiences: { company: string; role: string; start: string | null; end: string | null }[];
-  interview_questions: { category: string; question: string }[];
+  education: EducationItem[];
+  certifications: string[];
+  experience: ExperienceItem[];
+  projects: { name?: string; description?: string }[];
+  achievements: string[];
 }
 
-export interface DiversityAlert {
-  type: string;
-  severity: string;
+export interface CandidateDetail {
+  id: string;
+  rank: number;
+  parsed: ParsedCV;
+  scores: ScoreBreakdown;
+  explanation: Explanation;
+  matched_skills: string[];
+  missing_skills: string[];
+  interview_questions: InterviewQuestion[];
+  is_hidden_gem: boolean;
+}
+
+export interface DiversityFlag {
+  severity: "info" | "warning";
   title: string;
-  message: string;
+  detail: string;
 }
 
-export interface Analytics {
-  total_cvs: number;
-  candidates_ranked: number;
-  hidden_gems: number;
-  diversity_alerts: number;
-  diversity_alert_list: DiversityAlert[];
-  score_distribution: { range: string; count: number }[];
-  skill_heatmap: { skill: string; count: number }[];
-  experience_distribution: { range: string; count: number }[];
-  education_breakdown: { institution: string; count: number }[];
-  hiring_funnel: { stage: string; count: number }[];
-  diversity_insights: {
-    education_breakdown?: { name: string; count: number }[];
-    employer_breakdown?: { name: string; count: number }[];
-    hidden_gem_count?: number;
+export interface DiversityReport {
+  skewed: boolean;
+  flags: DiversityFlag[];
+  hidden_gems: CandidateSummary[];
+  shortlist_size: number;
+  distribution: {
+    education?: Record<string, number>;
+    experience?: Record<string, number>;
+    score_bands?: Record<string, number>;
   };
 }
 
-export interface ProcessingJob {
-  id: string;
-  job_type: string;
-  status: string;
-  progress: number;
-  total_items: number;
-  message: string | null;
+export interface ResultsResponse {
+  job_id: string;
+  jd: JDResponse;
+  candidates: CandidateSummary[];
+  diversity: DiversityReport;
+  using_ai: boolean;
+  elapsed_seconds: number;
 }
 
+// ---- helpers ----
+async function jsonOrThrow<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body.detail || JSON.stringify(body);
+    } catch {
+      /* ignore */
+    }
+    throw new Error(typeof detail === "string" ? detail : "Request failed");
+  }
+  return res.json();
+}
+
+// ---- endpoints ----
 export const api = {
-  health: () => fetch(`${API_URL}/health`).then((r) => r.json()),
+  base: BASE,
 
-  uploadJD: async (file?: File, text?: string) => {
-    const form = new FormData();
-    if (file) form.append("file", file);
-    if (text) form.append("text", text);
-    return fetchAPI<JobDescription>("/upload-jd", { method: "POST", body: form });
-  },
-
-  uploadCVs: async (jobDescriptionId: string, files: File[]) => {
-    const form = new FormData();
-    form.append("job_description_id", jobDescriptionId);
-    files.forEach((f) => form.append("files", f));
-    return fetchAPI<{ job_id: string; message: string; total: number }>("/upload-cvs", {
-      method: "POST",
-      body: form,
-    });
-  },
-
-  getProcessingStatus: (jobId: string) => fetchAPI<ProcessingJob>(`/processing/${jobId}`),
-
-  rankCandidates: (jobDescriptionId: string) =>
-    fetchAPI<{ job_id: string; message: string }>("/rank-candidates", {
-      method: "POST",
-      body: JSON.stringify({ job_description_id: jobDescriptionId }),
-    }),
-
-  listCandidates: (params: Record<string, string | number | boolean> = {}) => {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => query.set(k, String(v)));
-    return fetchAPI<{ items: CandidateListItem[]; total: number; page: number; page_size: number }>(
-      `/candidates?${query}`
+  async health() {
+    return jsonOrThrow<{ status: string; ai: boolean; model: string }>(
+      await fetch(`${BASE}/health`),
     );
   },
 
-  getCandidate: (id: string) => fetchAPI<CandidateDetail>(`/candidate/${id}`),
-
-  getAnalytics: (jobDescriptionId?: string) => {
-    const q = jobDescriptionId ? `?job_description_id=${jobDescriptionId}` : "";
-    return fetchAPI<Analytics>(`/analytics${q}`);
-  },
-
-  generateQuestions: (candidateId: string) =>
-    fetchAPI<{ questions: { category: string; question: string }[] }>("/generate-questions", {
-      method: "POST",
-      body: JSON.stringify({ candidate_id: candidateId }),
-    }),
-
-  downloadReport: async (candidateId: string) => {
-    const res = await fetch(`${API_URL}/api/v1/generate-report`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ candidate_id: candidateId }),
-    });
-    return res.blob();
-  },
-
-  exportCSV: (jobDescriptionId?: string) => {
-    const q = jobDescriptionId ? `?job_description_id=${jobDescriptionId}` : "";
-    return `${API_URL}/api/v1/export/csv${q}`;
-  },
-
-  exportPDF: (jobDescriptionId?: string) => {
-    const q = jobDescriptionId ? `?job_description_id=${jobDescriptionId}` : "";
-    return `${API_URL}/api/v1/export/pdf${q}`;
-  },
-
-  chat: (message: string, sessionId: string, jobDescriptionId?: string) =>
-    fetchAPI<{ response: string; session_id: string }>("/chat", {
-      method: "POST",
-      body: JSON.stringify({
-        message,
-        session_id: sessionId,
-        job_description_id: jobDescriptionId || null,
+  async parseJDText(text: string) {
+    return jsonOrThrow<JDResponse>(
+      await fetch(`${BASE}/api/jd/text`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
       }),
-    }),
+    );
+  },
 
-  listJobDescriptions: () =>
-    fetchAPI<{ id: string; title: string; created_at: string }[]>("/job-descriptions"),
+  async parseJDFile(file: File) {
+    const fd = new FormData();
+    fd.append("file", file);
+    return jsonOrThrow<JDResponse>(
+      await fetch(`${BASE}/api/jd`, { method: "POST", body: fd }),
+    );
+  },
 
-  getJobDescription: (id: string) => fetchAPI<JobDescription>(`/job-description/${id}`),
+  async screen(jdId: string, files: File[]) {
+    const fd = new FormData();
+    fd.append("jd_id", jdId);
+    files.forEach((f) => fd.append("files", f));
+    return jsonOrThrow<{ job_id: string; total: number }>(
+      await fetch(`${BASE}/api/screen`, { method: "POST", body: fd }),
+    );
+  },
 
-  hiringRecommendation: (jobDescriptionId: string) =>
-    fetchAPI<{
-      summary: string;
-      primary_recommendations: { name: string; score: number; rank: number; rationale: string }[];
-      hidden_gems_to_consider: { name: string; score: number; rank: number }[];
-      next_steps: string[];
-    }>(`/hiring-recommendation?job_description_id=${jobDescriptionId}`, { method: "POST" }),
+  async jobStatus(jobId: string) {
+    return jsonOrThrow<JobStatus>(await fetch(`${BASE}/api/jobs/${jobId}`));
+  },
 
-  compareCandidates: (candidateIds: string[], jobDescriptionId?: string) =>
-    fetchAPI<{ candidates: ComparedCandidate[] }>("/compare", {
-      method: "POST",
-      body: JSON.stringify({ candidate_ids: candidateIds, job_description_id: jobDescriptionId }),
-    }),
+  async results(jobId: string) {
+    return jsonOrThrow<ResultsResponse>(await fetch(`${BASE}/api/results/${jobId}`));
+  },
+
+  async candidate(id: string) {
+    return jsonOrThrow<CandidateDetail>(await fetch(`${BASE}/api/candidates/${id}`));
+  },
+
+  async chat(jobId: string, message: string) {
+    return jsonOrThrow<{ response: string }>(
+      await fetch(`${BASE}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId, message }),
+      }),
+    );
+  },
+
+  async compare(jobId: string, candidateIds: string[]) {
+    return jsonOrThrow<CandidateDetail[]>(
+      await fetch(`${BASE}/api/compare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId, candidate_ids: candidateIds }),
+      }),
+    );
+  },
+
+  csvUrl(jobId: string) {
+    return `${BASE}/api/export/csv/${jobId}`;
+  },
+
+  pdfUrl(candidateId: string) {
+    return `${BASE}/api/export/pdf/${candidateId}`;
+  },
 };
-
-export interface ComparedCandidate {
-  id: string;
-  name: string;
-  rank: number | null;
-  scores: { overall: number; skill: number; experience: number };
-  skills: string[];
-  years_of_experience: number;
-  is_hidden_gem: boolean;
-}

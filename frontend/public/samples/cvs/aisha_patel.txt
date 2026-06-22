@@ -1,0 +1,27 @@
+Aisha Patel
+aisha.patel@email.com | +1-555-0105 | Chicago, IL
+
+Backend Engineer | 5 years | Cloud-native development
+
+Experience:
+FinServe Global — Backend Engineer (2020-Present)
+- Python FastAPI services for financial data platform
+- AWS infrastructure with Terraform
+- PostgreSQL with read replicas
+
+CodeCraft — Junior Backend Developer (2018-2020)
+- API development and unit testing
+- Docker and Jenkins CI/CD
+
+Skills: Python, FastAPI, PostgreSQL, AWS, Docker, Terraform, SQL, Git
+
+Education:
+BS Computer Science, University of Illinois, 2018
+
+Projects:
+- Real-time market data API with sub-10ms latency
+- Automated infrastructure provisioning with Terraform
+
+Achievements:
+- Reduced cloud costs by 30% through optimization
+- 5 years professional experience

@@ -1,116 +1,192 @@
 "use client";
 
-import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowRight, FileSearch, Brain, Shield, Sparkles, BarChart3, MessageSquare } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Users, Gem, AlertTriangle, FileText } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { api, JDResponse, JobStatus, ResultsResponse } from "@/lib/api";
+import { Setup } from "@/components/recruit/setup";
+import { Results } from "@/components/recruit/results";
+import { CandidateDrawer } from "@/components/recruit/detail";
+import { Copilot } from "@/components/recruit/copilot";
 
-const features = [
-  {
-    icon: FileSearch,
-    title: "Semantic CV Matching",
-    description: "Vector-based similarity scoring — no keyword matching. Rank candidates by true fit.",
-  },
-  {
-    icon: Brain,
-    title: "AI Explainability",
-    description: "Understand strengths, gaps, risks, and growth potential for every candidate.",
-  },
-  {
-    icon: Shield,
-    title: "Bias & Diversity Analysis",
-    description: "Surface educational and employer concentration without inferring protected attributes.",
-  },
-  {
-    icon: MessageSquare,
-    title: "Recruiter Copilot",
-    description: "Ask questions about your candidate pool with RAG-powered chat.",
-  },
+type Stage = "setup" | "processing" | "results";
+
+const STEPS = [
+  { key: "parsing", label: "Reading & structuring CVs" },
+  { key: "ranking", label: "Scoring semantic fit" },
+  { key: "explaining", label: "Writing explanations & questions" },
+  { key: "done", label: "Done" },
 ];
 
-export default function HomePage() {
+export default function Home() {
+  const [stage, setStage] = useState<Stage>("setup");
+  const [ai, setAi] = useState<{ enabled: boolean | null; model: string }>({ enabled: null, model: "" });
+  const [job, setJob] = useState<JobStatus | null>(null);
+  const [results, setResults] = useState<ResultsResponse | null>(null);
+  const [error, setError] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [copilot, setCopilot] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    api.health()
+      .then((h) => setAi({ enabled: h.ai, model: h.model }))
+      .catch(() => setAi({ enabled: false, model: "" }));
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+  }, []);
+
+  const poll = useCallback((jobId: string) => {
+    const tick = async () => {
+      try {
+        const status = await api.jobStatus(jobId);
+        setJob(status);
+        if (status.status === "done") {
+          setResults(await api.results(jobId));
+          setStage("results");
+          return;
+        }
+        if (status.status === "failed") {
+          setError(status.message || "Screening failed");
+          return;
+        }
+        pollRef.current = setTimeout(tick, 1200);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Lost connection to the server");
+      }
+    };
+    tick();
+  }, []);
+
+  const onRun = useCallback(async (jd: JDResponse, files: File[]) => {
+    setError("");
+    setStage("processing");
+    setJob(null);
+    try {
+      const { job_id } = await api.screen(jd.id, files);
+      poll(job_id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to start screening");
+      setStage("setup");
+    }
+  }, [poll]);
+
+  const reset = () => {
+    if (pollRef.current) clearTimeout(pollRef.current);
+    setStage("setup");
+    setResults(null);
+    setJob(null);
+    setError("");
+  };
+
   return (
     <div className="min-h-screen">
-      {/* Hero */}
-      <section className="relative px-6 py-24">
-        <div className="mx-auto max-w-4xl text-center">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-            <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-accent-soft px-4 py-1.5 text-sm font-medium text-accent ring-1 ring-inset ring-accent/25">
-              <Sparkles className="h-4 w-4" />
-              AI-Augmented Recruitment
-            </span>
-            <h1 className="mt-6 text-5xl font-bold tracking-tight text-fg md:text-6xl">
-              Screen 1,000 CVs.{" "}
-              <span className="gradient-text">Surface the 10 who matter.</span>
-            </h1>
-            <p className="mx-auto mt-6 max-w-2xl text-lg text-muted">
-              RecruitIQ AI semantically evaluates candidates, ranks them, explains rankings,
-              flags diversity concerns, and generates tailored interview questions.
-            </p>
-            <div className="mt-10 flex items-center justify-center gap-4">
-              <Link href="/dashboard">
-                <Button size="lg" className="gap-2">
-                  Launch Dashboard <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="/analytics">
-                <Button variant="outline" size="lg">
-                  View Analytics
-                </Button>
-              </Link>
+      {/* header */}
+      <header className="glass sticky top-0 z-40">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
+          <button onClick={reset} className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-bold text-accent-fg">R</span>
+            <div className="text-left">
+              <div className="text-sm font-semibold leading-tight">RecruitIQ</div>
+              <div className="text-[11px] leading-tight text-faint">AI-Augmented Recruitment</div>
             </div>
-          </motion.div>
+          </button>
+          <div className="flex items-center gap-2 text-xs">
+            {ai.enabled === true && (
+              <span className="flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-success">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" /> AI live · {ai.model}
+              </span>
+            )}
+            {ai.enabled === false && (
+              <span className="flex items-center gap-1.5 rounded-full bg-warn-soft px-2.5 py-1 text-warn">
+                <span className="h-1.5 w-1.5 rounded-full bg-warn" /> Offline heuristic mode
+              </span>
+            )}
+          </div>
         </div>
-      </section>
+      </header>
 
-      {/* Stats */}
-      <section className="mx-auto max-w-7xl px-6 pb-16">
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Total CVs Processed" value="1,000+" icon={FileText} color="bg-accent" delay={0.1} />
-          <StatCard title="Candidates Ranked" value="950+" icon={Users} color="bg-info" delay={0.2} />
-          <StatCard title="Hidden Gems Found" value="47" icon={Gem} color="bg-gem" delay={0.3} />
-          <StatCard title="Diversity Alerts" value="12" icon={AlertTriangle} color="bg-warn" delay={0.4} />
-        </div>
-      </section>
+      <main className="mx-auto max-w-6xl px-5 py-8">
+        {stage === "setup" && (
+          <>
+            <div className="mb-8 max-w-2xl">
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                Screen 1,000 CVs. Surface the 10 who matter.
+              </h1>
+              <p className="mt-2 text-muted">
+                Semantic ranking beyond keywords — with transparent explanations, bias flags, and tailored interview questions for every candidate.
+              </p>
+            </div>
+            <Setup onRun={onRun} aiEnabled={ai.enabled} model={ai.model} />
+          </>
+        )}
 
-      {/* Features */}
-      <section className="mx-auto max-w-7xl px-6 py-16">
-        <h2 className="mb-12 text-center text-3xl font-bold text-fg">Platform Capabilities</h2>
-        <div className="grid gap-6 md:grid-cols-2">
-          {features.map((f, i) => (
-            <motion.div
-              key={f.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              viewport={{ once: true }}
-              className="surface group p-8 transition-colors hover:border-line-strong"
-            >
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-accent-soft ring-1 ring-inset ring-accent/25">
-                <f.icon className="h-6 w-6 text-accent" />
-              </div>
-              <h3 className="text-xl font-semibold text-fg">{f.title}</h3>
-              <p className="mt-2 text-muted">{f.description}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
+        {stage === "processing" && <Processing job={job} error={error} onReset={reset} />}
 
-      {/* CTA */}
-      <section className="mx-auto max-w-7xl px-6 py-16">
-        <div className="surface p-12 text-center">
-          <BarChart3 className="mx-auto h-10 w-10 text-accent" />
-          <h2 className="mt-4 text-3xl font-bold text-fg">Ready to transform your hiring?</h2>
-          <p className="mx-auto mt-4 max-w-lg text-muted">
-            Upload a job description and batch of CVs to get AI-powered rankings in minutes.
-          </p>
-          <Link href="/dashboard" className="mt-8 inline-block">
-            <Button size="lg">Start Screening</Button>
-          </Link>
-        </div>
-      </section>
+        {stage === "results" && results && (
+          <Results
+            results={results}
+            onSelect={setSelectedId}
+            onCopilot={() => setCopilot(true)}
+            onReset={reset}
+          />
+        )}
+      </main>
+
+      {selectedId && <CandidateDrawer id={selectedId} onClose={() => setSelectedId(null)} />}
+      {copilot && results && <Copilot jobId={results.job_id} onClose={() => setCopilot(false)} />}
+    </div>
+  );
+}
+
+function Processing({ job, error, onReset }: { job: JobStatus | null; error: string; onReset: () => void }) {
+  const current = job?.status ?? "parsing";
+  const progress = job?.progress ?? 0;
+  const activeIdx = STEPS.findIndex((s) => s.key === current);
+
+  return (
+    <div className="mx-auto max-w-lg pt-10">
+      <div className="surface p-8">
+        {error ? (
+          <div className="text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-danger-soft text-2xl text-danger">!</div>
+            <h2 className="text-lg font-semibold">Screening failed</h2>
+            <p className="mt-1 text-sm text-muted">{error}</p>
+            <button onClick={onReset} className="mt-4 text-sm font-medium text-accent hover:underline">Start over</button>
+          </div>
+        ) : (
+          <>
+            <div className="mb-6 text-center">
+              <h2 className="text-lg font-semibold">Screening candidates</h2>
+              <p className="mt-1 text-sm text-muted">
+                {job ? `${job.processed}/${job.total} processed` : "Starting…"}
+                {job && job.elapsed_seconds > 0 && <span className="text-faint"> · {job.elapsed_seconds}s</span>}
+              </p>
+            </div>
+
+            <div className="mb-6 h-2 overflow-hidden rounded-full bg-line">
+              <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${progress}%` }} />
+            </div>
+
+            <ol className="space-y-3">
+              {STEPS.slice(0, 3).map((s, i) => {
+                const done = activeIdx > i || current === "done";
+                const active = activeIdx === i;
+                return (
+                  <li key={s.key} className="flex items-center gap-3">
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
+                      done ? "bg-success text-white" : active ? "bg-accent text-white" : "bg-elevated text-faint"
+                    }`}>
+                      {done ? "✓" : i + 1}
+                    </span>
+                    <span className={`text-sm ${active ? "font-medium text-fg" : done ? "text-muted" : "text-faint"}`}>
+                      {s.label}
+                      {active && <span className="ml-1 inline-block animate-pulse">…</span>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </>
+        )}
+      </div>
     </div>
   );
 }
