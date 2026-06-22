@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { api, JDResponse, JobStatus, ResultsResponse } from "@/lib/api";
 import { Setup } from "@/components/recruit/setup";
 import { Results } from "@/components/recruit/results";
-import { CandidateDrawer } from "@/components/recruit/detail";
+import { CandidateView } from "@/components/recruit/detail";
 import { Copilot } from "@/components/recruit/copilot";
 
 type Stage = "setup" | "processing" | "results";
@@ -120,7 +120,7 @@ export default function Home() {
 
         {stage === "processing" && <Processing job={job} error={error} onReset={reset} />}
 
-        {stage === "results" && results && (
+        {stage === "results" && results && !selectedId && (
           <Results
             results={results}
             onSelect={setSelectedId}
@@ -128,9 +128,12 @@ export default function Home() {
             onReset={reset}
           />
         )}
+
+        {stage === "results" && results && selectedId && (
+          <CandidateView id={selectedId} onBack={() => setSelectedId(null)} />
+        )}
       </main>
 
-      {selectedId && <CandidateDrawer id={selectedId} onClose={() => setSelectedId(null)} />}
       {copilot && results && <Copilot jobId={results.job_id} onClose={() => setCopilot(false)} />}
     </div>
   );

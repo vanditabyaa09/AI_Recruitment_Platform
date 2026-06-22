@@ -24,7 +24,7 @@ from app.store import store, JobDescription, ScreeningJob, new_id
 from app.schemas import (
     JDTextRequest, JDResponse, JobStatus, ResultsResponse, CandidateSummary,
     CandidateDetail, DiversityReport, DiversityFlag, ChatRequest, ChatResponse,
-    CompareRequest,
+    CompareRequest, InterviewQuestion,
 )
 
 logger = logging.getLogger("recruitiq.api")
@@ -168,14 +168,22 @@ async def candidate_detail(candidate_id: str):
     c = store.get_candidate(candidate_id)
     if not c:
         raise HTTPException(404, "Candidate not found.")
-    if not c.interview_questions and c.scores:
-        # Lazily generate questions for non-shortlisted candidates on demand.
-        jd = store.get_jd(c.job_id)
-        if jd:
-            expl, qs = await ai.analyze_candidate(jd.parsed, c.parsed, c.scores)
-            c.explanation = expl
-            c.interview_questions = qs
     return _detail(c)
+
+
+@router.post("/candidates/{candidate_id}/questions", response_model=list[InterviewQuestion])
+async def generate_candidate_questions(candidate_id: str):
+    """Generate tailored interview questions for one candidate, on demand.
+    Recruiters trigger this from the candidate view — questions are not
+    produced automatically during screening."""
+    c = store.get_candidate(candidate_id)
+    if not c:
+        raise HTTPException(404, "Candidate not found.")
+    jd = _jd_for_candidate(c)
+    if not jd or not c.scores:
+        raise HTTPException(409, "Candidate has not been scored yet.")
+    c.interview_questions = await ai.generate_questions(jd.parsed, c.parsed, c.scores)
+    return c.interview_questions
 
 
 # --------------------------------------------------------------------------
@@ -237,7 +245,7 @@ async def export_pdf(candidate_id: str):
     c = store.get_candidate(candidate_id)
     if not c:
         raise HTTPException(404, "Candidate not found.")
-    jd = store.get_jd(c.job_id)
+    jd = _jd_for_candidate(c)
     pdf_bytes = report.candidate_pdf(c, jd)
     return StreamingResponse(
         iter([pdf_bytes]), media_type="application/pdf",
@@ -248,6 +256,12 @@ async def export_pdf(candidate_id: str):
 # --------------------------------------------------------------------------
 # Converters
 # --------------------------------------------------------------------------
+def _jd_for_candidate(c):
+    """A candidate's job_id is the SCREENING job id; resolve the JD through it."""
+    job = store.get_job(c.job_id)
+    return store.get_jd(job.jd_id) if job else None
+
+
 def _summary(c) -> CandidateSummary:
     return CandidateSummary(
         id=c.id, rank=c.rank, name=c.parsed.name, headline=c.parsed.headline,

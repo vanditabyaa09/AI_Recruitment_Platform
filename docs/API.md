@@ -57,7 +57,12 @@ Ranked candidates + diversity report (available once status is `done`).
 
 ### `GET /api/candidates/{candidate_id}` → `CandidateDetail`
 Full breakdown: scores, explanation (summary/strengths/gaps/flags/recommendation),
-matched & missing skills, parsed CV, and tailored interview questions.
+matched & missing skills, parsed CV. Interview questions are empty until generated.
+
+### `POST /api/candidates/{candidate_id}/questions` → `InterviewQuestion[]`
+Generate tailored interview questions **on demand** (the recruiter clicks a button in the
+candidate view). Questions are not produced automatically during screening — this keeps the
+screening fast and conserves API quota.
 
 ---
 

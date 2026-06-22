@@ -100,16 +100,18 @@ async def run_screening(job: ScreeningJob, raw_cvs: list[tuple[str, str]]) -> No
         div = diversity.analyze(candidates, settings.shortlist_size)
         job.diversity = div
 
-        # ---- 5. Explanations + questions for the shortlist ---------------
+        # ---- 5. Explanations for the shortlist ---------------------------
+        # Interview questions are NOT generated here — recruiters generate them
+        # on demand per candidate (saves quota; see the /questions endpoint).
         job.status = "explaining"
-        job.message = "Writing explanations and interview questions"
+        job.message = "Writing fit explanations"
         shortlist = candidates[:settings.shortlist_size]
         # Include hidden gems so recruiters get their rationale too.
         gem_ids = set(div["hidden_gem_ids"])
         to_explain = shortlist + [c for c in candidates if c.id in gem_ids and c not in shortlist]
 
         # Batch candidates per LLM call to stay within rate limits (a 20-CV run
-        # ends up ~8 generate calls total: 1 JD + ~4 parse + ~3 explain).
+        # ends up ~7 generate calls total: 1 JD + ~3 parse + ~2 explain).
         bsize = settings.explain_batch_size
         ex_batches = [to_explain[i:i + bsize] for i in range(0, len(to_explain), bsize)]
         done = {"n": 0}
@@ -118,12 +120,11 @@ async def run_screening(job: ScreeningJob, raw_cvs: list[tuple[str, str]]) -> No
 
         async def explain_batch(batch: list[Candidate]):
             items = [(c.id, c.parsed, c.scores) for c in batch]
-            results = await ai.analyze_candidates_batch(jd.parsed, items)
-            for cid, (expl, qs) in results.items():
+            results = await ai.explain_candidates_batch(jd.parsed, items)
+            for cid, expl in results.items():
                 cand = by_id.get(cid)
                 if cand:
                     cand.explanation = expl
-                    cand.interview_questions = qs
             done["n"] += 1
             job.progress = 70 + int(28 * done["n"] / total_b)
 

@@ -148,53 +148,30 @@ def _coerce_cv(data: dict) -> ParsedCV:
 
 
 # ==========================================================================
-# Explanation + tailored interview questions (one combined call)
+# Explanation (auto, batched) — questions are generated separately on demand
 # ==========================================================================
-_ANALYZE_SYSTEM = """You are a senior recruiter writing a candidate evaluation for a hiring manager.
-Given a job description, a candidate's parsed CV, and computed fit scores, return ONLY JSON:
-{
- "explanation": {
-   "summary": "2-3 sentence verdict naming the candidate and their fit, specific to THIS person",
-   "strengths": ["concrete strengths tied to the CV"],
-   "gaps": ["specific missing requirements or risks"],
-   "flags": ["anything to verify, e.g. short tenures, career gaps"],
-   "recommendation": "strong_yes | yes | maybe | no"
- },
- "questions": [
-   {"category": "technical|behavioral|gap_probing|project_deep_dive",
-    "question": "a question that references SPECIFIC CV content (a named project, company, skill, or gap)"}
- ]
-}
-Generate 4-6 questions. Questions MUST be specific to this candidate — no generic boilerplate."""
-
-
-_ANALYZE_BATCH_SYSTEM = """You are a senior recruiter evaluating several candidates for one role.
+_EXPLAIN_BATCH_SYSTEM = """You are a senior recruiter evaluating several candidates for one role.
 You receive the job description and a JSON array of candidates (each has an "index", their parsed
 CV, and computed fit scores). For EACH candidate return an evaluation.
 Return ONLY a JSON array, one object per candidate in the same order, each:
 {
  "index": <the candidate index>,
- "explanation": {
-   "summary": "2-3 sentence verdict naming the candidate, specific to THEM",
-   "strengths": ["concrete strengths tied to their CV"],
-   "gaps": ["specific missing requirements or risks"],
-   "flags": ["things to verify, e.g. short tenures, gaps"],
-   "recommendation": "strong_yes | yes | maybe | no"
- },
- "questions": [
-   {"category": "technical|behavioral|gap_probing|project_deep_dive",
-    "question": "references SPECIFIC content from THIS candidate's CV"}
- ]
+ "summary": "2-3 sentence verdict naming the candidate, specific to THEM",
+ "strengths": ["concrete strengths tied to their CV"],
+ "gaps": ["specific missing requirements or risks"],
+ "flags": ["things to verify, e.g. short tenures, gaps"],
+ "recommendation": "strong_yes | yes | maybe | no"
 }
-Give 4-5 questions each. Every question MUST be specific to that candidate — never generic, never
-copied between candidates."""
+Be specific to each candidate — never generic, never copied between candidates."""
 
 
-async def analyze_candidates_batch(
+async def explain_candidates_batch(
     jd: ParsedJD, items: list[tuple[str, ParsedCV, ScoreBreakdown]]
-) -> dict[str, tuple[Explanation, list[InterviewQuestion]]]:
-    """items: list of (candidate_id, cv, scores). Evaluates all in one LLM call.
-    Returns {candidate_id: (explanation, questions)}. Falls back per-candidate."""
+) -> dict[str, Explanation]:
+    """items: list of (candidate_id, cv, scores). Writes a fit explanation for
+    each in one LLM call. Returns {candidate_id: Explanation}. Interview
+    questions are NOT generated here — they are produced on demand per candidate
+    (see generate_questions)."""
     if not items:
         return {}
     if gemini.available:
@@ -207,35 +184,42 @@ async def analyze_candidates_batch(
             import json as _json
             user = f"JOB DESCRIPTION:\n{jd.model_dump_json()}\n\nCANDIDATES:\n{_json.dumps(payload)}"
             data = await gemini.generate_json(
-                _ANALYZE_BATCH_SYSTEM, user,
-                max_tokens=700 * len(items) + 512, temperature=0.4,
+                _EXPLAIN_BATCH_SYSTEM, user,
+                max_tokens=420 * len(items) + 512, temperature=0.4,
             )
             arr = data if isinstance(data, list) else data.get("candidates", []) if isinstance(data, dict) else []
-            out: dict[str, tuple[Explanation, list[InterviewQuestion]]] = {}
+            out: dict[str, Explanation] = {}
             for obj in arr:
                 if not isinstance(obj, dict):
                     continue
                 cid = id_by_index.get(int(obj.get("index", -1)))
                 if cid is None:
                     continue
-                expl = _coerce_explanation(obj.get("explanation", {}))
-                qs = [InterviewQuestion(category=str(q.get("category", "technical")),
-                                        question=str(q.get("question", "")).strip())
-                      for q in obj.get("questions", []) if isinstance(q, dict) and q.get("question")]
-                out[cid] = (expl, qs)
-            # Fill any the model dropped with heuristic.
+                out[cid] = _coerce_explanation(obj)
             for cid, cv, sc in items:
                 if cid not in out:
-                    out[cid] = (_heuristic_explanation(jd, cv, sc), _heuristic_questions(jd, cv))
+                    out[cid] = _heuristic_explanation(jd, cv, sc)
             return out
         except Exception as e:
-            logger.warning("Batch analysis via AI failed, using heuristic: %s", e)
-    return {cid: (_heuristic_explanation(jd, cv, sc), _heuristic_questions(jd, cv))
-            for cid, cv, sc in items}
+            logger.warning("Batch explanation via AI failed, using heuristic: %s", e)
+    return {cid: _heuristic_explanation(jd, cv, sc) for cid, cv, sc in items}
 
 
-async def analyze_candidate(jd: ParsedJD, cv: ParsedCV, scores: ScoreBreakdown
-                            ) -> tuple[Explanation, list[InterviewQuestion]]:
+# ==========================================================================
+# Tailored interview questions — generated ON DEMAND for a single candidate
+# ==========================================================================
+_QUESTIONS_SYSTEM = """You are a senior recruiter preparing for an interview. Given the job
+description, a candidate's parsed CV, and their fit scores, generate tailored interview questions.
+Return ONLY JSON: {"questions": [
+  {"category": "technical|behavioral|gap_probing|project_deep_dive",
+   "question": "references SPECIFIC content from THIS candidate's CV — a named project, company, skill, or an identified gap"}
+]}
+Generate 5-6 questions. Cover their claimed skills, their actual projects/experience, and probe any
+gaps vs the role. Every question MUST be specific to this candidate — no generic boilerplate."""
+
+
+async def generate_questions(jd: ParsedJD, cv: ParsedCV, scores: ScoreBreakdown
+                             ) -> list[InterviewQuestion]:
     if gemini.available:
         try:
             user = (
@@ -243,19 +227,16 @@ async def analyze_candidate(jd: ParsedJD, cv: ParsedCV, scores: ScoreBreakdown
                 f"CANDIDATE CV:\n{cv.model_dump_json()}\n\n"
                 f"FIT SCORES (0-100):\n{scores.model_dump_json()}"
             )
-            data = await gemini.generate_json(_ANALYZE_SYSTEM, user, max_tokens=1800, temperature=0.4)
-            if isinstance(data, dict) and "explanation" in data:
-                expl = _coerce_explanation(data["explanation"])
-                qs = [InterviewQuestion(
-                        category=str(q.get("category", "technical")),
-                        question=str(q.get("question", "")).strip(),
-                      ) for q in data.get("questions", []) if isinstance(q, dict) and q.get("question")]
-                if not qs:
-                    qs = _heuristic_questions(jd, cv)
-                return expl, qs
+            data = await gemini.generate_json(_QUESTIONS_SYSTEM, user, max_tokens=1200, temperature=0.5)
+            items = data.get("questions") if isinstance(data, dict) else data if isinstance(data, list) else []
+            qs = [InterviewQuestion(category=str(q.get("category", "technical")),
+                                    question=str(q.get("question", "")).strip())
+                  for q in (items or []) if isinstance(q, dict) and q.get("question")]
+            if qs:
+                return qs
         except Exception as e:
-            logger.warning("Candidate analysis via AI failed, using heuristic: %s", e)
-    return _heuristic_explanation(jd, cv, scores), _heuristic_questions(jd, cv)
+            logger.warning("Question generation via AI failed, using heuristic: %s", e)
+    return _heuristic_questions(jd, cv)
 
 
 def _coerce_explanation(d: dict) -> Explanation:

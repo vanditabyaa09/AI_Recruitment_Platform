@@ -204,6 +204,12 @@ export const api = {
     return jsonOrThrow<CandidateDetail>(await fetch(`${BASE}/api/candidates/${id}`));
   },
 
+  async generateQuestions(id: string) {
+    return jsonOrThrow<InterviewQuestion[]>(
+      await fetch(`${BASE}/api/candidates/${id}/questions`, { method: "POST" }),
+    );
+  },
+
   async chat(jobId: string, message: string) {
     return jsonOrThrow<{ response: string }>(
       await fetch(`${BASE}/api/chat`, {
