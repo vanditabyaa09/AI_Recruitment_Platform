@@ -308,8 +308,12 @@ def _heuristic_jd(text: str) -> ParsedJD:
     low = text.lower()
     hard = [s for s in _SKILL_VOCAB if s in low]
     soft = [s for s in _SOFT_VOCAB if s in low]
-    seniority = ("Principal" if "principal" in low else "Lead" if "lead" in low
-                 else "Senior" if "senior" in low else "Junior" if "junior" in low else "Mid")
+    # Word-boundary checks; "senior" wins over a stray "lead" inside "leadership".
+    seniority = ("Principal" if re.search(r"\bprincipal\b", low)
+                 else "Senior" if re.search(r"\bsenior\b|\bsr\.?\b", low)
+                 else "Lead" if re.search(r"\b(lead|staff)\b", low)
+                 else "Junior" if re.search(r"\bjunior\b|\bjr\.?\b", low)
+                 else "Mid")
     m = re.search(r"(\d+)\+?\s*years?", low)
     min_years = float(m.group(1)) if m else 3.0
     first_line = next((l.strip() for l in text.splitlines() if l.strip()), "Role")
