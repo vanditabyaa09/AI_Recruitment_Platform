@@ -22,6 +22,19 @@ class VectorStore:
             metadatas=[{k: str(v)[:500] for k, v in metadata.items()}],
         )
 
+    def get_jd_embedding(self, jd_id: str) -> list[float] | None:
+        """Return a previously stored JD embedding so ranking can reuse it
+        instead of paying to embed the same JD again."""
+        try:
+            res = self.jd_collection.get(ids=[jd_id], include=["embeddings"])
+            embeddings = res.get("embeddings") if res else None
+            if embeddings is not None and len(embeddings) > 0:
+                emb = embeddings[0]
+                return list(emb) if emb is not None else None
+        except Exception:
+            pass
+        return None
+
     def upsert_cv(self, candidate_id: str, embedding: list[float], metadata: dict):
         self.cv_collection.upsert(
             ids=[candidate_id],
