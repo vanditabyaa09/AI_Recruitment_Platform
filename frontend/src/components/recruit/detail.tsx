@@ -10,6 +10,8 @@ const Q_LABEL: Record<string, string> = {
   behavioral: "Behavioral",
   gap_probing: "Gap Probing",
   project_deep_dive: "Project Deep-Dive",
+  system_design: "System Design",
+  role_fit: "Role Fit",
   soft_skills: "Soft Skills",
 };
 

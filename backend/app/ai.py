@@ -208,14 +208,29 @@ async def explain_candidates_batch(
 # ==========================================================================
 # Tailored interview questions — generated ON DEMAND for a single candidate
 # ==========================================================================
-_QUESTIONS_SYSTEM = """You are a senior recruiter preparing for an interview. Given the job
-description, a candidate's parsed CV, and their fit scores, generate tailored interview questions.
+_QUESTIONS_SYSTEM = """You are a senior interviewer building an interview kit for ONE candidate.
+You are given the JOB DESCRIPTION, the candidate's parsed CV, and their fit scores. Your job is to
+CROSS-REFERENCE the two: for each requirement in the JD, look at what the candidate's CV actually
+shows, and write a question that pressure-tests the overlap (or the gap).
+
 Return ONLY JSON: {"questions": [
-  {"category": "technical|behavioral|gap_probing|project_deep_dive",
-   "question": "references SPECIFIC content from THIS candidate's CV — a named project, company, skill, or an identified gap"}
+  {"category": "technical|behavioral|gap_probing|project_deep_dive|system_design|role_fit",
+   "question": "the question",
+   "rationale": "one short clause on what it probes and why it matters for THIS role"}
 ]}
-Generate 5-6 questions. Cover their claimed skills, their actual projects/experience, and probe any
-gaps vs the role. Every question MUST be specific to this candidate — no generic boilerplate."""
+
+Generate 8-10 questions with this coverage:
+  - 2-3 PROJECT_DEEP_DIVE: name a specific project/achievement from the CV and dig into their
+    decisions, scale, and tradeoffs.
+  - 2 TECHNICAL: about a must-have skill the candidate claims — go beyond "have you used X" to a
+    concrete scenario relevant to the role's responsibilities.
+  - 1-2 GAP_PROBING: target a must-have or domain in the JD that is weak/absent on the CV.
+  - 1 SYSTEM_DESIGN or ROLE_FIT: tied to the seniority and responsibilities in the JD.
+  - 1-2 BEHAVIORAL: anchored to a real company/role/tenure on the CV.
+
+Every question MUST reference SPECIFIC CV content (a named project, employer, skill, number, or
+gap) AND connect to a JD requirement. No generic boilerplate, no question reusable for another
+candidate."""
 
 
 async def generate_questions(jd: ParsedJD, cv: ParsedCV, scores: ScoreBreakdown
@@ -227,11 +242,17 @@ async def generate_questions(jd: ParsedJD, cv: ParsedCV, scores: ScoreBreakdown
                 f"CANDIDATE CV:\n{cv.model_dump_json()}\n\n"
                 f"FIT SCORES (0-100):\n{scores.model_dump_json()}"
             )
-            data = await gemini.generate_json(_QUESTIONS_SYSTEM, user, max_tokens=1200, temperature=0.5)
+            data = await gemini.generate_json(_QUESTIONS_SYSTEM, user, max_tokens=2200, temperature=0.6)
             items = data.get("questions") if isinstance(data, dict) else data if isinstance(data, list) else []
-            qs = [InterviewQuestion(category=str(q.get("category", "technical")),
-                                    question=str(q.get("question", "")).strip())
-                  for q in (items or []) if isinstance(q, dict) and q.get("question")]
+            qs = []
+            for q in (items or []):
+                if not isinstance(q, dict) or not q.get("question"):
+                    continue
+                text = str(q["question"]).strip()
+                rationale = str(q.get("rationale", "")).strip()
+                if rationale:
+                    text = f"{text}  ↳ {rationale}"
+                qs.append(InterviewQuestion(category=str(q.get("category", "technical")), question=text))
             if qs:
                 return qs
         except Exception as e:
@@ -298,8 +319,11 @@ def _heuristic_jd(text: str) -> ParsedJD:
     m = re.search(r"(\d+)\+?\s*years?", low)
     min_years = float(m.group(1)) if m else 3.0
     first_line = next((l.strip() for l in text.splitlines() if l.strip()), "Role")
+    # Clip at the first sentence/clause so a one-line JD doesn't make the whole
+    # paragraph the "role".
+    role = re.split(r"[.\n;|–—]", first_line)[0].strip()[:60] or "Role"
     return ParsedJD(
-        role=first_line[:80],
+        role=role,
         seniority=seniority,
         experience_required=f"{int(min_years)}+ years",
         min_years=min_years,
@@ -383,26 +407,95 @@ def _heuristic_explanation(jd: ParsedJD, cv: ParsedCV, scores: ScoreBreakdown) -
 
 
 def _heuristic_questions(jd: ParsedJD, cv: ParsedCV) -> list[InterviewQuestion]:
+    """Combine JD requirements with the candidate's actual CV to build a varied,
+    role-grounded question set (used when the LLM is unavailable)."""
     qs: list[InterviewQuestion] = []
-    for p in cv.projects[:1]:
-        name = p.get("name") if isinstance(p, dict) else None
+    role = jd.role or "this role"
+    cv_skills = {s.lower() for s in cv.skills}
+    matched = list(dict.fromkeys(s for s in (jd.must_have + jd.hard_skills) if s.lower() in cv_skills))
+    missing = [m for m in jd.must_have if m.lower() not in cv_skills]
+
+    # Project deep-dives — name the candidate's actual projects.
+    for p in cv.projects[:2]:
+        if not isinstance(p, dict):
+            continue
+        name, desc = p.get("name"), p.get("description")
         if name:
+            extra = f" (you describe it as \"{desc}\")" if desc else ""
             qs.append(InterviewQuestion(category="project_deep_dive",
-                question=f"Walk me through {name} — what was the hardest technical decision and why?"))
+                question=(f"Walk me through {name}{extra}. What was the hardest technical decision, how did "
+                          f"you measure success, and how does it map to what we need in {role}?")))
+
+    # Technical — must-have skills the candidate actually claims.
+    for s in matched[:3]:
+        qs.append(InterviewQuestion(category="technical",
+            question=(f"This role relies heavily on {s}. Describe a production problem you solved with {s}, "
+                      f"the alternatives you considered, and the tradeoffs you accepted.")))
+
+    # Gap-probing — must-haves missing from the CV.
+    for m in missing[:2]:
+        qs.append(InterviewQuestion(category="gap_probing",
+            question=(f"The role lists {m} as a must-have, but it isn't evident on your CV. Where have you "
+                      f"touched {m}, and how would you get to production-level proficiency quickly?")))
+
+    # Seniority / experience fit.
+    if jd.min_years and cv.years_of_experience:
+        if cv.years_of_experience < jd.min_years:
+            qs.append(InterviewQuestion(category="role_fit",
+                question=(f"This is a {jd.seniority or 'senior'} role targeting {jd.min_years:.0f}+ years and "
+                          f"you have about {cv.years_of_experience:.0f}. What scope of ownership have you held "
+                          f"that shows you can operate at this level?")))
+        else:
+            qs.append(InterviewQuestion(category="behavioral",
+                question=(f"With ~{cv.years_of_experience:.0f} years of experience, tell me about a time you set "
+                          f"technical direction or mentored others toward a hard deadline.")))
+
+    # Behavioral — anchored to a real employer.
     for x in cv.experience[:1]:
         if x.company:
+            role_at = f" as {x.role}" if x.role else ""
             qs.append(InterviewQuestion(category="behavioral",
-                question=f"At {x.company}, tell me about a time you had to deliver under pressure across teams."))
-    for s in cv.skills[:2]:
+                question=(f"At {x.company}{role_at}, describe a time you had to align stakeholders or deliver "
+                          f"under pressure. What would you do differently now?")))
+
+    # Domain knowledge from the JD.
+    for d in jd.domain_knowledge[:1]:
         qs.append(InterviewQuestion(category="technical",
-            question=f"Describe a challenging problem you solved using {s} and the tradeoffs you weighed."))
-    cv_skills = {s.lower() for s in cv.skills}
-    for m in jd.must_have:
-        if m.lower() not in cv_skills:
-            qs.append(InterviewQuestion(category="gap_probing",
-                question=f"This role needs {m}, which isn't obvious on your CV. How have you worked with it?"))
-            break
-    return qs[:6]
+            question=(f"We work in {d}. What domain-specific challenges have you faced there, and how did they "
+                      f"shape your technical choices?")))
+
+    # Nice-to-have depth.
+    for nt in jd.nice_to_have[:1]:
+        qs.append(InterviewQuestion(category="technical",
+            question=(f"Beyond the core requirements we also value {nt}. What's your hands-on exposure to it, "
+                      f"and where have you applied it?")))
+
+    # Achievement-based.
+    for a in cv.achievements[:1]:
+        qs.append(InterviewQuestion(category="behavioral",
+            question=(f"You list \"{a}\" as an achievement. What was your specific contribution, and how would "
+                      f"you reproduce that kind of impact in this role?")))
+
+    # System design for senior+ roles.
+    if (jd.seniority or "").lower() in ("senior", "lead", "principal", "staff"):
+        anchor = matched[0] if matched else (cv.skills[0] if cv.skills else "your stack")
+        qs.append(InterviewQuestion(category="system_design",
+            question=(f"Design a system for a core responsibility of this role using {anchor}. Walk through "
+                      f"the data model, how you'd scale it, and how you'd handle failure.")))
+
+    # Ensure a reasonable minimum.
+    if len(qs) < 5:
+        for s in (cv.skills or ["your core stack"])[:3]:
+            qs.append(InterviewQuestion(category="technical",
+                question=f"Describe a challenging problem you solved using {s} and what you learned."))
+
+    # De-dupe by question text, keep order.
+    seen, out = set(), []
+    for q in qs:
+        if q.question not in seen:
+            seen.add(q.question)
+            out.append(q)
+    return out[:10]
 
 
 # ==========================================================================
